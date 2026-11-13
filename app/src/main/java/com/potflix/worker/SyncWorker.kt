@@ -12,6 +12,7 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.util.Log
+import androidx.room.withTransaction
 import androidx.work.workDataOf
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -23,6 +24,7 @@ class SyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted workerParams: WorkerParameters,
     private val movieDao: MovieDao,
+    private val database: com.potflix.data.local.PotFlixDatabase,
     private val api: PotFlixApi,
     private val serverPreferences: com.potflix.data.local.preferences.ServerPreferences,
     private val aListScraper: com.potflix.data.remote.AListScraper
@@ -113,20 +115,15 @@ class SyncWorker @AssistedInject constructor(
                         currentPct += pctPerBase
                     }
                 } else if (server.type == com.potflix.data.local.preferences.ServerType.FTP) {
-                    val ftpBase = server.baseUrl
-                    val bases = listOf(
-                        "Hollywood" to "${ftpBase}English%20Movies/",
-                        "Bollywood" to "${ftpBase}Hindi%20Movies/",
-                        "Animation" to "${ftpBase}Animation%20Movies/",
-                        "South Indian" to "${ftpBase}South%20Indian%20Movies/"
-                    )
-                    var currentPct = 10f
-                    val pctPerBase = 60f / bases.size
-                    for ((catName, baseUrl) in bases) {
-                        syncMovies(catName, baseUrl, listOf("2026", "2025", "2024", "2023"), currentPct, currentPct + pctPerBase, isFullSync)
-                        currentPct += pctPerBase
+                    val recentYears = listOf("2026", "2025", "2024", "2023")
+                    val pctPerBase = 70f / LIVE_MOVIE_SECTIONS.size
+                    for ((index, section) in LIVE_MOVIE_SECTIONS.withIndex()) {
+                        val startPct = index * pctPerBase
+                        syncMovies(section.first, section.second, recentYears, startPct, startPct + pctPerBase, isFullSync)
                     }
-                    syncTvSeries("TV Series", "${ftpBase}TV-WEB-Series/")
+                    for (section in LIVE_SERIES_SECTIONS) {
+                        syncTvSeries(section.first, section.second)
+                    }
                 }
             }
 
@@ -156,6 +153,37 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 
+    /** Adds a title, or attaches a new quality to it when the same title already exists. */
+    private suspend fun importCatalogueRow(item: PreCrawledMovie) {
+        val movieId = movieDao.getMovieIdByTitleAndYear(item.title, item.year ?: "")
+            ?: movieDao.insertMovie(
+                com.potflix.data.local.entity.MovieEntity(
+                    title = item.title,
+                    year = item.year ?: "",
+                    posterUrl = item.posterUrl,
+                    category = item.category,
+                    region = null,
+                    tmdbId = item.tmdbId,
+                    overview = item.overview,
+                    rating = item.rating?.takeIf { it > 0.0 },
+                    isImdbTop250 = item.category == "IMDB Top 250"
+                )
+            )
+        if (movieId <= 0) return
+        for (video in item.resolvedVideos()) {
+            if (movieDao.countVideosWithUrl(movieId, video.url) == 0) {
+                movieDao.insertVideo(
+                    com.potflix.data.local.entity.VideoEntity(
+                        movieId = movieId,
+                        quality = video.quality,
+                        url = video.url,
+                        fileName = video.name
+                    )
+                )
+            }
+        }
+    }
+
     private suspend fun syncMovies(categoryName: String, baseUrl: String, yearsToSync: List<String>, basePct: Float = 0f, maxPct: Float = 100f, isFullSync: Boolean = false) {
         val preCrawled = getPreCrawledData(categoryName)
         if (preCrawled != null && preCrawled.isNotEmpty()) {
@@ -163,42 +191,17 @@ class SyncWorker @AssistedInject constructor(
             setProgress(workDataOf("progress_msg" to "Importing $categoryName...", "progress_pct" to basePct))
             
             val toProcess = if (isFullSync) preCrawled else preCrawled.take(30)
-            val pctPerMovie = (maxPct - basePct) / Math.max(1, toProcess.size)
-            
-            for ((index, item) in toProcess.withIndex()) {
-                val existing = movieDao.getMovieIdByTitleAndYear(item.title, item.year ?: "")
-                if (existing == null) {
-                    val movieId = movieDao.insertMovie(
-                        com.potflix.data.local.entity.MovieEntity(
-                            title = item.title,
-                            year = item.year ?: "",
-                            posterUrl = item.posterUrl,
-                            category = item.category,
-                            region = null,
-                            tmdbId = item.tmdbId,
-                            overview = item.overview,
-                            rating = item.rating?.takeIf { it > 0.0 },
-                            isImdbTop250 = item.category == "IMDB Top 250"
-                        )
-                    )
-                    if (movieId > 0) {
-                        if (item.videos.isNotEmpty()) {
-                            for (v in item.videos) {
-                                movieDao.insertVideo(
-                                    com.potflix.data.local.entity.VideoEntity(
-                                        movieId = movieId,
-                                        quality = v.quality,
-                                        url = v.url,
-                                        fileName = v.name
-                                    )
-                                )
-                            }
-                        }
+            val batches = toProcess.chunked(IMPORT_BATCH_SIZE)
+            val pctPerBatch = (maxPct - basePct) / Math.max(1, batches.size)
+
+            for ((index, batch) in batches.withIndex()) {
+                // One transaction per batch: without it each row forces its own disk sync.
+                database.withTransaction {
+                    for (item in batch) {
+                        importCatalogueRow(item)
                     }
                 }
-                if (index % 10 == 0) {
-                    setProgress(workDataOf("progress_msg" to "Importing $categoryName...", "progress_pct" to (basePct + (index * pctPerMovie))))
-                }
+                setProgress(workDataOf("progress_msg" to "Importing $categoryName...", "progress_pct" to (basePct + ((index + 1) * pctPerBatch))))
             }
             return
         }
@@ -221,25 +224,12 @@ class SyncWorker @AssistedInject constructor(
                 val yearFolder = rootEntries.find { it.isDirectory && it.name.contains("($year)") }
                 if (yearFolder != null) {
                     val movieFolders = scraper.scrapeDirectory(yearFolder.url)
-                    val liveCount = movieFolders.size
-                    val dbCount = movieDao.getCountForCategoryAndYear(categoryName, year)
-                    if (liveCount > 0 && liveCount <= dbCount) {
-                        Log.d("SyncWorker", "$categoryName ($year) is up to date (Live: $liveCount, DB: $dbCount). Skipping.")
-                        continue
-                    }
                     Log.d("SyncWorker", "Syncing $categoryName for year $year")
                     processMovieFolders(if (isFullSync) movieFolders else movieFolders.take(30), categoryName, year, scraper)
                 }
             }
         } else {
             // No year folders found, assume movies are directly in the root directory (CDN Structure)
-            val liveCount = rootEntries.size
-            val dbCount = movieDao.getCountForCategory(categoryName)
-            if (liveCount > 0 && liveCount <= dbCount) {
-                Log.d("SyncWorker", "$categoryName is up to date (Live: $liveCount, DB: $dbCount). Skipping.")
-                return
-            }
-            
             Log.d("SyncWorker", "No year folders found, syncing $categoryName directly...")
             setProgress(workDataOf("progress_msg" to "Syncing $categoryName...", "progress_pct" to basePct))
             
@@ -361,7 +351,7 @@ class SyncWorker @AssistedInject constructor(
                         )
                     )
                     if (movieId > 0) {
-                        for (v in item.videos) {
+                        for (v in item.resolvedVideos()) {
                             movieDao.insertVideo(
                                 com.potflix.data.local.entity.VideoEntity(
                                     movieId = movieId,
@@ -381,13 +371,6 @@ class SyncWorker @AssistedInject constructor(
         
         // Root level delta check
         val rootEntries = scraper.scrapeDirectory(baseUrl)
-        val liveCount = rootEntries.size
-        val dbCount = movieDao.getCountForCategory(categoryName)
-        if (liveCount > 0 && liveCount <= dbCount) {
-            Log.d("SyncWorker", "TV Series ($categoryName) is up to date (Live: $liveCount, DB: $dbCount). Skipping.")
-            return
-        }
-
         // Recursively find series folders up to depth 2
         suspend fun crawl(entries: List<com.potflix.data.remote.ScrapedEntry>, depth: Int, parentFolderName: String = "") {
             if (depth > 2) return
@@ -396,10 +379,9 @@ class SyncWorker @AssistedInject constructor(
                 // If it looks like a series folder (has year or specific name structure)
                 // Or if it's a structural folder like "A-L"
                 val isSeasonFolder = folder.name.contains("Season", ignoreCase = true)
-                val hasYear = folder.name.matches(Regex(".*\\((19|20)\\d{2}.*\\).*"))
-                val hasTvSeriesKeyword = folder.name.contains("TV Series", ignoreCase = true)
+                val hasYear = folder.name.contains(Regex("\\(.*?(19|20)\\d{2}.*?\\)"))
                 
-                if (isSeasonFolder || hasTvSeriesKeyword || hasYear) {
+                if (isSeasonFolder || hasYear) {
                     // If it's just "Season 1", the title should be its parent folder's name (e.g. "13 Reasons Why")
                     val seriesTitle = if (isSeasonFolder) {
                         parentFolderName.takeIf { it.isNotEmpty() } ?: folder.name
@@ -437,7 +419,7 @@ class SyncWorker @AssistedInject constructor(
                 val movieId = movieDao.insertMovie(
                     com.potflix.data.local.entity.MovieEntity(
                         title = title,
-                        year = "", 
+                        year = Regex("\\b(19|20)\\d{2}\\b").find(seriesTitleRaw)?.value ?: "",
                         posterUrl = tmdbMatch?.posterPath?.let { "https://image.tmdb.org/t/p/w342$it" }, 
                         category = categoryName,
                         region = "English",
@@ -462,3 +444,28 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 }
+
+private const val IMPORT_BATCH_SIZE = 250
+private const val FLIX_7 = "http://172.16.50.7/DHAKA-FLIX-7/"
+private const val FLIX_10 = "http://172.16.50.10/DHAKA-FLIX-10/"
+private const val FLIX_12 = "http://172.16.50.12/DHAKA-FLIX-12/"
+private const val FLIX_14 = "http://172.16.50.14/DHAKA-FLIX-14/"
+
+private val LIVE_MOVIE_SECTIONS = listOf(
+    "Hollywood" to "${FLIX_7}English%20Movies/",
+    "Hollywood" to "${FLIX_14}English%20Movies%20%281080p%29/",
+    "Foreign" to "${FLIX_7}Foreign%20Language%20Movies/",
+    "Tollywood" to "${FLIX_7}Kolkata%20Bangla%20Movies/",
+    "Bollywood" to "${FLIX_14}Hindi%20Movies/",
+    "Animation" to "${FLIX_14}Animation%20Movies/",
+    "Animation" to "${FLIX_14}Animation%20Movies%20%281080p%29/",
+    "South Indian" to "${FLIX_14}SOUTH%20INDIAN%20MOVIES/South%20Movies/",
+    "South Indian" to "${FLIX_14}SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/"
+)
+
+private val LIVE_SERIES_SECTIONS = listOf(
+    "TV Series" to "${FLIX_12}TV-WEB-Series/",
+    "Korean TV Series" to "${FLIX_14}KOREAN%20TV%20%26%20WEB%20Series/",
+    "Anime Series" to "${FLIX_10}Anime%20%26%20Cartoon%20TV%20Series/",
+    "Documentary Series" to "${FLIX_10}Documentary/"
+)

@@ -285,13 +285,9 @@ class MovieRepositoryImpl @Inject constructor(
                         val seasonEntries = scraper.scrapeDirectory(sf.url)
                         val videoEntries = seasonEntries.filter { it.isVideo }
                         for (e in videoEntries) {
-                            val sMatch = Regex("""S(\d{1,2})[.\s_-]*E(\d{1,2})""", RegexOption.IGNORE_CASE).find(e.name)
-                                ?: Regex("""(?:season|s)[.\s_-]*(\d{1,2})[.\s_-]*(?:episode|ep|e)[.\s_-]*(\d{1,2})""", RegexOption.IGNORE_CASE).find(e.name)
-                            val epOnlyMatch = Regex("""(?:episode|ep|e)[.\s_-]*(\d{1,3})""", RegexOption.IGNORE_CASE).find(e.name)
-
-                            val epSeason = sMatch?.groupValues?.get(1)?.toIntOrNull() ?: sfSeasonNum
-                            val epNumber = sMatch?.groupValues?.get(2)?.toIntOrNull()
-                                ?: epOnlyMatch?.groupValues?.get(1)?.toIntOrNull()
+                            val parsed = parseEpisodeNumbers(e.name)
+                            val epSeason = parsed.season ?: sfSeasonNum
+                            val epNumber = parsed.episode
 
                             val resolvedEpisodeUrl = if (activeServer.type == com.potflix.data.local.preferences.ServerType.ALIST && e.url.contains(activeServer.baseUrl)) {
                                 e.url.replace(activeServer.baseUrl, activeServer.baseUrl.trimEnd('/') + "/d/")
@@ -322,13 +318,9 @@ class MovieRepositoryImpl @Inject constructor(
                 }
 
                 for (e in videosToUse) {
-                    val sMatch = Regex("""S(\d{1,2})[.\s_-]*E(\d{1,2})""", RegexOption.IGNORE_CASE).find(e.name)
-                        ?: Regex("""(?:season|s)[.\s_-]*(\d{1,2})[.\s_-]*(?:episode|ep|e)[.\s_-]*(\d{1,2})""", RegexOption.IGNORE_CASE).find(e.name)
-                    val epOnlyMatch = Regex("""(?:episode|ep|e)[.\s_-]*(\d{1,3})""", RegexOption.IGNORE_CASE).find(e.name)
-
-                    val epSeason = sMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-                    val epNumber = sMatch?.groupValues?.get(2)?.toIntOrNull()
-                        ?: epOnlyMatch?.groupValues?.get(1)?.toIntOrNull()
+                    val parsed = parseEpisodeNumbers(e.name)
+                    val epSeason = parsed.season ?: 1
+                    val epNumber = parsed.episode
 
                     val resolvedEpisodeUrl = if (activeServer.type == com.potflix.data.local.preferences.ServerType.ALIST && e.url.contains(activeServer.baseUrl)) {
                         e.url.replace(activeServer.baseUrl, activeServer.baseUrl.trimEnd('/') + "/d/")
@@ -420,6 +412,9 @@ class MovieRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getMovieStreamUrl(folderUrl: String): Result<String> {
+        if (folderUrl.isBlank()) {
+            return Result.failure(Exception("This title has no server address in the catalogue."))
+        }
         val isDirectVideo = folderUrl.endsWith(".mkv", true) || 
                             folderUrl.endsWith(".mp4", true) || 
                             folderUrl.endsWith(".avi", true) || 
@@ -468,7 +463,7 @@ class MovieRepositoryImpl @Inject constructor(
                         }
                     } catch (e: Exception) {}
                 }
-                Result.failure(Exception("No video stream found in folder"))
+                Result.failure(Exception("Could not read this folder from the server, or it has no video files."))
             }
         } catch (e: Exception) {
             Result.failure(e)

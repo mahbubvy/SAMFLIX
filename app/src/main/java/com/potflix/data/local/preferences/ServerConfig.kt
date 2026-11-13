@@ -13,7 +13,7 @@ data class ServerConfig(
         val DHAKAFLIX = ServerConfig(
             id = "dhakaflix",
             name = "Dhakaflix (Local)",
-            baseUrl = "http://172.16.50.4/", // Not strictly used for rewriting since paths already contain IPs
+            baseUrl = "http://172.16.50.7/DHAKA-FLIX-7/", // Reachability check; catalogue URLs carry their own host
             type = ServerType.FTP,
             isBuiltIn = true
         )
@@ -26,6 +26,6 @@ data class ServerConfig(
             isBuiltIn = true
         )
 
-        val BUILT_IN_SERVERS = listOf(DHAKAFLIX, NAGORDOLA)
+        val BUILT_IN_SERVERS = listOf(DHAKAFLIX)
     }
 }

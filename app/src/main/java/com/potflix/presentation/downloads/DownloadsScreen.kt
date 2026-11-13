@@ -13,6 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -69,6 +72,8 @@ fun DownloadsScreen(
 
 @Composable
 fun DownloadItemCard(download: LocalDownloadEntity, navController: NavController, viewModel: DownloadsViewModel) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth().clickable {
             if (download.status == DownloadService.STATUS_SUCCESSFUL && download.localUri != null) {
@@ -154,10 +159,40 @@ fun DownloadItemCard(download: LocalDownloadEntity, navController: NavController
                     }
                 }
                 
-                IconButton(onClick = { viewModel.deleteDownload(download.downloadId) }) {
+                IconButton(onClick = { showDeleteDialog = true }) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        val finished = download.status == DownloadService.STATUS_SUCCESSFUL
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(if (finished) "Delete this download?" else "Cancel this download?") },
+            text = {
+                Text(
+                    if (finished) {
+                        "\"${download.title}\" will be removed from your phone. You'll need to download it again to watch it offline."
+                    } else {
+                        "\"${download.title}\" will stop downloading and its progress will be lost."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    viewModel.deleteDownload(download.downloadId)
+                }) {
+                    Text(if (finished) "Delete" else "Cancel download", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text(if (finished) "Keep" else "Keep downloading")
+                }
+            }
+        )
     }
 }

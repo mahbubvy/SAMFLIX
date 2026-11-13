@@ -48,6 +48,25 @@ fun PotFlixNavGraph(
             TvSeriesScreen(navController = navController)
         }
         
+        composable(route = Screen.Browse.route) {
+            com.potflix.presentation.browse.BrowseScreen(navController = navController)
+        }
+
+        composable(
+            route = Screen.BrowseFolder.route,
+            arguments = listOf(
+                navArgument("url") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType },
+                navArgument("series") { type = NavType.BoolType; defaultValue = false }
+            )
+        ) { entry ->
+            com.potflix.presentation.browse.BrowseFolderScreen(
+                navController = navController,
+                title = entry.arguments?.getString("title").orEmpty(),
+                isSeries = entry.arguments?.getBoolean("series") ?: false
+            )
+        }
+
         composable(route = Screen.Settings.route) {
             com.potflix.presentation.settings.SettingsScreen(navController = navController)
         }

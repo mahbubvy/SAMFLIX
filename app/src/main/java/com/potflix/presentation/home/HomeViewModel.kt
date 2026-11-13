@@ -93,6 +93,11 @@ class HomeViewModel @Inject constructor(
     private var loadDataJob: kotlinx.coroutines.Job? = null
     private var heroWatchlistJob: kotlinx.coroutines.Job? = null
 
+    /** Detail normally records this, but the hero's Play button can skip Detail. */
+    fun onHeroPlaybackStarted(movie: Movie) {
+        viewModelScope.launch { repository.addToWatchHistory(movie) }
+    }
+
     fun refresh() {
         loadHomeData()
     }

@@ -52,7 +52,7 @@ fun CategoryRow(
                 color = Color.White
             )
 
-            Row(
+            if (onSeeAllClick != null) Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {

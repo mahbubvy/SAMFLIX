@@ -98,6 +98,13 @@ interface MovieDao {
     @Query("SELECT id FROM movies WHERE title = :title AND year = :year LIMIT 1")
     suspend fun getMovieIdByTitleAndYear(title: String, year: String?): Long?
 
+    @Transaction
+    @Query("SELECT * FROM movies WHERE title = :title AND year = :year LIMIT 1")
+    suspend fun getMovieWithDetailsByTitleAndYear(title: String, year: String): MovieWithDetails?
+
+    @Query("SELECT COUNT(*) FROM videos WHERE movie_id = :movieId AND url = :url")
+    suspend fun countVideosWithUrl(movieId: Long, url: String): Int
+
     // Categories (Legacy - we can keep this for any dynamic categories they had)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCategories(categories: List<CategoryEntity>)

@@ -16,6 +16,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven(url = "https://mpvrex.github.io/mpvRex-libmpv") {
+            content { includeGroup("com.github.sfsakhawat999") }
+        }
     }
 }
 

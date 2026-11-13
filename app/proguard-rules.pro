@@ -40,6 +40,5 @@
 -keep class com.potflix.data.local.entity.** { *; }
 -keep class com.potflix.data.repository.**$** { *; }
 
-# Keep LibVLC JNI Interfaces
--keep class org.videolan.libvlc.** { *; }
--keep class org.videolan.libvlc.interfaces.** { *; }
+# mpv's native code calls back into these classes by name
+-keep class is.xyz.mpv.** { *; }

@@ -34,6 +34,8 @@ import com.potflix.presentation.home.components.CategoryRow
 import com.potflix.presentation.home.components.HeroBanner
 import com.potflix.presentation.home.components.Top10Row
 import com.potflix.presentation.navigation.Screen
+import com.potflix.presentation.navigation.playHero
+import com.potflix.presentation.common.LibraryEmptyState
 import com.potflix.presentation.common.shimmerEffect
 import com.potflix.presentation.common.HomeScreenSkeleton
 import androidx.compose.animation.Crossfade
@@ -105,7 +107,7 @@ fun HomeScreen(
                         HeroBanner(
                             movie = heroMovie,
                             onPlayClick = {
-                                navController.navigate(Screen.Detail.createRoute(heroMovie))
+                                navController.playHero(heroMovie, viewModel::onHeroPlaybackStarted)
                             },
                             onInfoClick = {
                                 navController.navigate(Screen.Detail.createRoute(heroMovie))
@@ -133,8 +135,7 @@ fun HomeScreen(
                             },
                             onMovieLongClick = { movie ->
                                 movieToDeleteFromHistory = movie
-                            },
-                            onSeeAllClick = { } // Hide or do nothing for history see all for now
+                            }
                         )
                     }
                 }
@@ -179,6 +180,10 @@ fun HomeScreen(
             }
         }
     }
+
+        if (!isLoading && trendingMovies.isEmpty() && distinctCategories.isEmpty() && watchHistory.isEmpty()) {
+            LibraryEmptyState(onReload = viewModel::refresh)
+        }
 
         // Floating Glassmorphism Header Bar (Overlay on top)
         Column(

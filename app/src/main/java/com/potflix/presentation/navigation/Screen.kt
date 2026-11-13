@@ -11,6 +11,12 @@ sealed class Screen(val route: String) {
             return if (query.isNotBlank()) "search?query=${android.net.Uri.encode(query)}" else "search"
         }
     }
+    object Browse : Screen("browse")
+    object BrowseFolder : Screen("browse_folder/{url}/{title}?series={series}") {
+        fun createRoute(url: String, title: String, isSeries: Boolean): String {
+            return "browse_folder/${android.net.Uri.encode(url)}/${android.net.Uri.encode(title)}?series=$isSeries"
+        }
+    }
     object Settings : Screen("settings")
     object Downloads : Screen("downloads")
     object Watchlist : Screen("watchlist")

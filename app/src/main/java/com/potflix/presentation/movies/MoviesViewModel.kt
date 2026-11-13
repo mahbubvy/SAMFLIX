@@ -54,6 +54,11 @@ class MoviesViewModel @Inject constructor(
         loadData()
     }
 
+    /** Detail normally records this, but the hero's Play button can skip Detail. */
+    fun onHeroPlaybackStarted(movie: Movie) {
+        viewModelScope.launch { repository.addToWatchHistory(movie) }
+    }
+
     fun refresh() {
         loadData()
     }

@@ -45,11 +45,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Initialize Firebase Anonymous Auth
-        lifecycleScope.launch {
-            firebaseSyncManager.initAuth()
-        }
-
         // Request POST_NOTIFICATIONS on Android 13+ and ensure daily recommendations are scheduled
         checkNotificationPermissionAndSchedule()
         

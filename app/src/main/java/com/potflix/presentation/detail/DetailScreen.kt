@@ -74,9 +74,7 @@ fun DetailScreen(
     val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
     
     val context = androidx.compose.ui.platform.LocalContext.current
-    val isUserLoggedIn = remember {
-        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.let { !it.isAnonymous } == true
-    }
+    val isUserLoggedIn = true // No accounts in this build, so nothing is gated behind sign-in.
 
     var showEditTmdbDialog by remember { mutableStateOf(false) }
     var isPlayingTrailer by remember { mutableStateOf(false) }
@@ -631,7 +629,7 @@ fun DetailScreen(
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = "Wi-Fi Connection Required",
+                                        text = "SamOnline Connection Required",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp,
                                         color = Color.White
@@ -639,9 +637,9 @@ fun DetailScreen(
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = if (isMobile) {
-                                            "Local ISP content servers are only reachable over broadband Wi-Fi. You are currently connected to Mobile Data."
+                                            "This title is on the SamOnline server, which only works on your SamOnline connection. You're on mobile data right now."
                                         } else {
-                                            "Local ISP content servers are only reachable over broadband Wi-Fi. No Wi-Fi connection detected."
+                                            "This title is on the SamOnline server, which only works on your SamOnline connection. You don't seem to be connected right now."
                                         },
                                         fontSize = 13.sp,
                                         color = Color.White.copy(alpha = 0.8f),
@@ -747,7 +745,7 @@ fun DetailScreen(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = if (streamError != null) "Error: $streamError" else "The server did not return playable streams or episodes. You can fix the TMDB metadata to resolve it.",
+                                        text = if (streamError != null) "Error: $streamError" else "The server didn't return anything to play. If you're on a different Wi-Fi, switch to your SamOnline connection and try again. If you're already on it, the title's TMDB info may be wrong.",
                                         fontSize = 12.sp,
                                         color = Color.White.copy(alpha = 0.7f),
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -1048,10 +1046,10 @@ fun DetailScreen(
         AlertDialog(
             onDismissRequest = { showMobileDataPrompt = false },
             icon = { Icon(Icons.Default.Wifi, contentDescription = null, tint = Color(0xFFFF9800)) },
-            title = { Text("Switch to Wi-Fi for Streaming", fontWeight = FontWeight.Bold, color = Color.White) },
+            title = { Text("Connect to SamOnline to stream", fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Text(
-                    "PotFlix content servers are hosted on local broadband Wi-Fi (BDIX). Streaming over mobile data may fail to connect or consume cellular data.",
+                    "The server only works on your SamOnline connection, so this will probably fail on mobile data.",
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 14.sp,
                     lineHeight = 20.sp

@@ -1,12 +1,13 @@
 package com.potflix.presentation.player
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
-import android.view.SurfaceView
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -16,15 +17,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.BrightnessMedium
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,15 +58,30 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.videolan.libvlc.LibVLC
-import org.videolan.libvlc.Media
-import org.videolan.libvlc.MediaPlayer
-import org.videolan.libvlc.util.VLCVideoLayout
+
+/** One request to play a video. Each is a separate object, so asking again always counts as new. */
+private class PlayRequest(
+    val movieUrl: String,
+    val streamUrl: String,
+    val title: String,
+    val playbackPosition: Long
+)
+
+private fun Intent.toPlayRequest(): PlayRequest? {
+    val streamUrl = getStringExtra("streamUrl") ?: return null
+    return PlayRequest(
+        movieUrl = getStringExtra("movieUrl") ?: "",
+        streamUrl = streamUrl,
+        title = getStringExtra("title") ?: "Video",
+        playbackPosition = getLongExtra("playbackPosition", 0L)
+    )
+}
 
 @AndroidEntryPoint
 class PlayerActivity : ComponentActivity() {
     private val _isInPipMode = mutableStateOf(false)
-    
+    private var playRequest by mutableStateOf<PlayRequest?>(null)
+
     @javax.inject.Inject
     lateinit var movieRepository: com.potflix.domain.repository.MovieRepository
 
@@ -73,35 +94,53 @@ class PlayerActivity : ComponentActivity() {
 
         // Auto-Orientation: Force landscape mode upon opening, regardless of system orientation lock
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        
+
         // Immersive Mode
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
-        val movieUrl = intent.getStringExtra("movieUrl") ?: ""
-        val streamUrl = intent.getStringExtra("streamUrl") ?: return
-        val title = intent.getStringExtra("title") ?: "Video"
-        val playbackPosition = intent.getLongExtra("playbackPosition", 0L)
+        playRequest = intent.toPlayRequest() ?: return
 
         setContent {
             PotFlixTheme {
-                VlcVideoPlayer(
-                    movieUrl = movieUrl,
-                    streamUrl = streamUrl, 
-                    title = title, 
-                    playbackPosition = playbackPosition,
-                    isPipMode = _isInPipMode.value,
-                    movieRepository = movieRepository,
-                    serverPreferences = serverPreferences
-                )
+                val request = playRequest ?: return@PotFlixTheme
+                // The player uses a blue accent; the rest of the app keeps its own colours.
+                MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = PlayerAccentBlue)) {
+                    // A new request starts a fresh player, which saves the old video's progress on the way out.
+                    key(request) {
+                        VideoPlayer(
+                            movieUrl = request.movieUrl,
+                            streamUrl = request.streamUrl,
+                            title = request.title,
+                            playbackPosition = request.playbackPosition,
+                            isPipMode = _isInPipMode.value,
+                            movieRepository = movieRepository,
+                            serverPreferences = serverPreferences
+                        )
+                    }
+                }
             }
         }
     }
 
+    /** singleTask brings this activity back, in place of a new one, when a video is picked during picture-in-picture. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val request = intent.toPlayRequest() ?: return
+        // Picking the video already in the small window only brings it back, at its current position.
+        if (isInPictureInPictureMode && request.streamUrl == playRequest?.streamUrl) return
+        playRequest = request
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        enterPictureInPicture()
+    }
+
+    fun enterPictureInPicture() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val params = android.app.PictureInPictureParams.Builder()
                 .setAspectRatio(android.util.Rational(16, 9))
@@ -117,10 +156,10 @@ class PlayerActivity : ComponentActivity() {
 }
 
 @Composable
-fun VlcVideoPlayer(
+fun VideoPlayer(
     movieUrl: String = "",
-    streamUrl: String, 
-    title: String, 
+    streamUrl: String,
+    title: String,
     playbackPosition: Long = 0L,
     isPipMode: Boolean = false,
     movieRepository: com.potflix.domain.repository.MovieRepository? = null,
@@ -128,19 +167,14 @@ fun VlcVideoPlayer(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var subtitleUrl by remember { mutableStateOf<String?>(null) }
-    var selectedSpuTrack by remember { mutableStateOf(-1) }
-    var selectedAudioTrack by remember { mutableStateOf(-1) }
-    var audioTracks by remember { mutableStateOf<List<MediaPlayer.TrackDescription>>(emptyList()) }
-    var spuTracks by remember { mutableStateOf<List<MediaPlayer.TrackDescription>>(emptyList()) }
-    var showAudioMenu by remember { mutableStateOf(false) }
-    var showSpuMenu by remember { mutableStateOf(false) }
-    
+    var serverSubtitle by remember { mutableStateOf<java.io.File?>(null) }
+
     var seasons by remember { mutableStateOf<List<com.potflix.domain.model.Season>>(emptyList()) }
     var currentStreamUrl by remember { mutableStateOf(streamUrl) }
     var currentTitle by remember { mutableStateOf(title) }
     var showEpisodesPanel by remember { mutableStateOf(false) }
-    var initializedTracks by remember { mutableStateOf(false) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var loadAttempt by remember { mutableStateOf(0) }
 
     LaunchedEffect(movieUrl) {
         if (movieUrl.isNotEmpty() && movieRepository != null) {
@@ -150,22 +184,17 @@ fun VlcVideoPlayer(
             }
         }
     }
-    
+
     val currentStreamUrlState by rememberUpdatedState(currentStreamUrl)
 
-    val libVLC = remember { 
-        LibVLC(context, ArrayList<String>().apply { 
-            // Hardware acceleration & GPU decoding
-            add("--avcodec-hw=any")
-            add("--codec=mediacodec_ndk,mediacodec_jni,all")
-            add("--drop-late-frames")
-            add("--no-skip-frames")
-            add("--network-caching=3000")
-            add("--file-caching=3000")
-            add("--live-caching=3000")
-        }) 
-    }
-    val mediaPlayer = remember { MediaPlayer(libVLC) }
+    val playerPrefs = remember { context.getSharedPreferences("player_settings", android.content.Context.MODE_PRIVATE) }
+    var subtitleSizePercent by remember { mutableStateOf(playerPrefs.getInt("subtitle_size", 100)) }
+
+    val mediaPlayer = remember { MpvController(context, subtitleSizePercent / 100.0) }
+    val audioTracks by mediaPlayer.audioTracks
+    val spuTracks by mediaPlayer.subtitleTracks
+    var selectedAudioTrack by mediaPlayer.selectedAudio
+    var selectedSpuTrack by mediaPlayer.selectedSubtitle
 
     val playEpisode: (String, String) -> Unit = { newStreamUrl, newTitle ->
         // Save current progress before switching
@@ -178,26 +207,11 @@ fun VlcVideoPlayer(
         currentStreamUrl = newStreamUrl
         currentTitle = newTitle
     }
-    
+
     // Fetch Subtitles
     LaunchedEffect(currentStreamUrl) {
-        withContext(Dispatchers.IO) {
-            try {
-                if (!currentStreamUrl.contains("nagordola.com.bd")) {
-                    val folderUrl = currentStreamUrl.substringBeforeLast("/") + "/"
-                    val doc = org.jsoup.Jsoup.connect(folderUrl).get()
-                    val links = doc.select("a[href\$=.srt]")
-                    if (links.isNotEmpty()) {
-                        val srtHref = links.first()?.attr("href")
-                        if (!srtHref.isNullOrEmpty()) {
-                            subtitleUrl = if (srtHref.startsWith("http")) srtHref else "$folderUrl$srtHref"
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        serverSubtitle = null
+        serverSubtitle = withContext(Dispatchers.IO) { downloadServerSubtitle(context, currentStreamUrl) }
     }
 
     val subtitleLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -210,44 +224,16 @@ fun VlcVideoPlayer(
                     val originalName = getFileNameFromUri(context, uri) ?: "loaded_subtitle.srt"
                     val sanitizedName = originalName.replace("[^a-zA-Z0-9._-]".toRegex(), "_")
                     val localSubFile = java.io.File(cacheDir, "${System.currentTimeMillis()}_$sanitizedName")
-                    
+
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         localSubFile.outputStream().use { output ->
                             input.copyTo(output)
                         }
                     }
-                    
-                    val existingTrackIds = withContext(Dispatchers.Main) {
-                        mediaPlayer.spuTracks?.map { it.id }?.toSet() ?: emptySet()
-                    }
-                    val fileUri = Uri.fromFile(localSubFile)
+
                     withContext(Dispatchers.Main) {
-                        val added = mediaPlayer.addSlave(
-                            org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle,
-                            fileUri,
-                            true
-                        )
-                        android.util.Log.d("PlayerActivity", "Added subtitle slave $fileUri: $added")
-                        
-                        var updatedTracks = mediaPlayer.spuTracks?.toList() ?: emptyList()
-                        var attempts = 0
-                        while (attempts < 6) {
-                            kotlinx.coroutines.delay(200)
-                            updatedTracks = mediaPlayer.spuTracks?.toList() ?: emptyList()
-                            val newlyAdded = updatedTracks.find { it.id !in existingTrackIds && it.id != -1 }
-                            if (newlyAdded != null) break
-                            attempts++
-                        }
-                        spuTracks = updatedTracks
-                        val targetTrack = updatedTracks.find { it.id !in existingTrackIds && it.id != -1 }
-                            ?: updatedTracks.lastOrNull { it.id != -1 }
-                        if (targetTrack != null) {
-                            mediaPlayer.spuTrack = targetTrack.id
-                            selectedSpuTrack = targetTrack.id
-                            android.widget.Toast.makeText(context, "Subtitle active: ${targetTrack.name}", android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            android.widget.Toast.makeText(context, "Loaded: $originalName", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                        mediaPlayer.addSubtitle(localSubFile.path, originalName, select = true)
+                        android.widget.Toast.makeText(context, "Subtitle active: $originalName", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("PlayerActivity", "Failed to load subtitle file", e)
@@ -259,115 +245,80 @@ fun VlcVideoPlayer(
         }
     }
 
-    LaunchedEffect(currentStreamUrl, subtitleUrl) {
-        initializedTracks = false
-        val media = if (currentStreamUrl.startsWith("/")) {
-            Media(libVLC, currentStreamUrl)
-        } else {
-            Media(libVLC, Uri.parse(currentStreamUrl))
-        }
-        // Force GPU MediaCodec hardware decoding for smooth 4K playback
-        media.setHWDecoderEnabled(true, true)
-        media.addOption(":codec=mediacodec_ndk,mediacodec_jni,all")
-        media.addOption(":avcodec-hw=any")
-        
-        if (playbackPosition > 0L && currentStreamUrl == streamUrl) {
-            media.addOption(":start-time=${playbackPosition / 1000}")
-        }
-        
-        if (subtitleUrl != null) {
-            media.addSlave(org.videolan.libvlc.interfaces.IMedia.Slave(
-                org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle, 
-                4, 
-                subtitleUrl
-            )) // 4 = SLAVE_PRIORITY_USER
-        }
-        
-        mediaPlayer.media = media
-        media.release()
-        mediaPlayer.play()
+    LaunchedEffect(currentStreamUrl, loadAttempt) {
+        loadFailed = false
+        mediaPlayer.load(
+            url = playableUrl(currentStreamUrl),
+            startMs = if (currentStreamUrl == streamUrl) playbackPosition else 0L
+        )
     }
 
-    var isPlaying by remember { mutableStateOf(true) }
-    var isBuffering by remember { mutableStateOf(true) }
-    var currentTime by remember { mutableStateOf(0L) }
-    var totalDuration by remember { mutableStateOf(0L) }
+    val fileLoaded by mediaPlayer.fileLoaded
+
+    fun selectPreferredSubtitle() {
+        val preferred = serverPreferences?.getPreferredSubtitleLanguage() ?: "off"
+        if (preferred == "off") {
+            mediaPlayer.spuTrack = -1
+        } else {
+            com.potflix.util.LanguageUtils.findMatchingTrack(spuTracks, preferred, isSubtitle = true)
+                ?.let { mediaPlayer.spuTrack = it.id }
+        }
+    }
+
+    LaunchedEffect(fileLoaded) {
+        if (fileLoaded) {
+            val preferredAudio = serverPreferences?.getPreferredAudioLanguage() ?: "en"
+            if (preferredAudio != "auto") {
+                com.potflix.util.LanguageUtils.findMatchingTrack(audioTracks, preferredAudio, isSubtitle = false)
+                    ?.let { mediaPlayer.audioTrack = it.id }
+            }
+            selectPreferredSubtitle()
+        }
+    }
+
+    LaunchedEffect(serverSubtitle, fileLoaded) {
+        val subtitle = serverSubtitle
+        if (fileLoaded && subtitle != null) {
+            mediaPlayer.addSubtitle(subtitle.path, subtitle.name, select = false)
+        }
+    }
+
+    val isPlaying by mediaPlayer.isPlaying
+    val isBuffering by mediaPlayer.isBuffering
+    var currentTime by mediaPlayer.currentTimeMs
+    val totalDuration by mediaPlayer.durationMs
     var isControlsVisible by remember { mutableStateOf(true) }
-    
+
     val activity = context as? ComponentActivity
-    var isRotationLocked by remember { mutableStateOf(false) }
+    var isPortrait by remember { mutableStateOf(false) }
     var isScreenLocked by remember { mutableStateOf(false) }
     var isUnlockPromptVisible by remember { mutableStateOf(false) }
 
     var isDraggingTimeline by remember { mutableStateOf(false) }
     var dragPositionMs by remember { mutableStateOf(0L) }
     var dragFraction by remember { mutableStateOf(0f) }
-    
-    var resizeMode by remember { mutableStateOf("FIT") }
+
+    var resizeMode by remember {
+        mutableStateOf(playerPrefs.getString("fit_mode", null)?.takeIf { it in FIT_MODES } ?: FIT_MODES.first())
+    }
+    var playbackSpeed by remember { mutableStateOf(1f) }
+    var subtitleDelayMs by remember { mutableStateOf(0L) }
+    var audioDelayMs by remember { mutableStateOf(0L) }
+    var openSheet by remember { mutableStateOf(PlayerSheet.None) }
+    var interactionTick by remember { mutableStateOf(0) }
+
+    LaunchedEffect(resizeMode) {
+        mediaPlayer.setFitMode(resizeMode)
+    }
 
     DisposableEffect(mediaPlayer) {
-        val listener = MediaPlayer.EventListener { event ->
-            when (event.type) {
-                MediaPlayer.Event.Playing -> {
-                    isPlaying = true
-                    isBuffering = false
-                    selectedAudioTrack = mediaPlayer.audioTrack
-                    selectedSpuTrack = mediaPlayer.spuTrack
-                    if (!initializedTracks) {
-                        val aTracks = mediaPlayer.audioTracks?.toList() ?: emptyList()
-                        audioTracks = aTracks
-                        val sTracks = mediaPlayer.spuTracks?.toList() ?: emptyList()
-                        spuTracks = sTracks
-                        
-                        // Apply Preferred Audio Language
-                        val prefAudio = serverPreferences?.getPreferredAudioLanguage() ?: "en"
-                        if (prefAudio != "auto") {
-                            val matchedAudio = com.potflix.util.LanguageUtils.findMatchingTrack(aTracks, prefAudio, isSubtitle = false)
-                            if (matchedAudio != null && mediaPlayer.audioTrack != matchedAudio.id) {
-                                mediaPlayer.audioTrack = matchedAudio.id
-                                selectedAudioTrack = matchedAudio.id
-                            }
-                        }
-
-                        // Apply Preferred Subtitle Language
-                        val prefSub = serverPreferences?.getPreferredSubtitleLanguage() ?: "off"
-                        if (prefSub == "off") {
-                            val disableTrack = sTracks.find { it.id == -1 || it.name.contains("disable", ignoreCase = true) }
-                            if (disableTrack != null && mediaPlayer.spuTrack != disableTrack.id) {
-                                mediaPlayer.spuTrack = disableTrack.id
-                                selectedSpuTrack = disableTrack.id
-                            } else if (mediaPlayer.spuTrack != -1) {
-                                mediaPlayer.spuTrack = -1
-                                selectedSpuTrack = -1
-                            }
-                        } else {
-                            val matchedSub = com.potflix.util.LanguageUtils.findMatchingTrack(sTracks, prefSub, isSubtitle = true)
-                            if (matchedSub != null && mediaPlayer.spuTrack != matchedSub.id) {
-                                mediaPlayer.spuTrack = matchedSub.id
-                                selectedSpuTrack = matchedSub.id
-                            }
-                        }
-                        
-                        initializedTracks = true
-                    }
-                }
-                MediaPlayer.Event.ESAdded,
-                MediaPlayer.Event.ESDeleted -> {
-                    audioTracks = mediaPlayer.audioTracks?.toList() ?: emptyList()
-                    spuTracks = mediaPlayer.spuTracks?.toList() ?: emptyList()
-                }
-                MediaPlayer.Event.ESSelected -> {
-                    selectedAudioTrack = mediaPlayer.audioTrack
-                    selectedSpuTrack = mediaPlayer.spuTrack
-                }
-                MediaPlayer.Event.Buffering -> isBuffering = event.buffering < 100f
-                MediaPlayer.Event.Paused -> isPlaying = false
-                MediaPlayer.Event.TimeChanged -> currentTime = mediaPlayer.time
-                MediaPlayer.Event.LengthChanged -> totalDuration = mediaPlayer.length
-            }
+        mediaPlayer.onLoadFailed = {
+            isControlsVisible = false
+            isScreenLocked = false
+            openSheet = PlayerSheet.None
+            showEpisodesPanel = false
+            loadFailed = true
         }
-        mediaPlayer.setEventListener(listener)
-        
         onDispose {
             val savedTime = mediaPlayer.time
             val savedLength = mediaPlayer.length
@@ -378,17 +329,23 @@ fun VlcVideoPlayer(
                     repo.updateWatchProgress(movieUrl, savedStreamUrl, savedTime, savedLength)
                 }
             }
-            mediaPlayer.setEventListener(null)
-            mediaPlayer.stop()
+            mediaPlayer.onLoadFailed = null
             mediaPlayer.release()
-            libVLC.release()
         }
     }
 
-    // Auto-hide controls after 2.5 seconds of inactivity
-    LaunchedEffect(isControlsVisible, isPlaying, isBuffering, isDraggingTimeline, isScreenLocked) {
-        if (isControlsVisible && isPlaying && !isBuffering && !isPipMode && !isDraggingTimeline && !isScreenLocked) {
-            delay(2500L)
+    val accessibilityManager = remember {
+        context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+    }
+
+    // Hide the controls 4 seconds after the last touch. Buffering shows its own spinner,
+    // so it must neither reopen the controls nor hold them on screen. TalkBack users
+    // explore the screen by touch and need the controls to stay put while they do.
+    LaunchedEffect(isControlsVisible, isPlaying, isDraggingTimeline, isScreenLocked, openSheet, interactionTick) {
+        if (isControlsVisible && isPlaying && !isPipMode && !isDraggingTimeline && !isScreenLocked &&
+            openSheet == PlayerSheet.None && !accessibilityManager.isTouchExplorationEnabled
+        ) {
+            delay(4000L)
             isControlsVisible = false
         }
     }
@@ -401,46 +358,36 @@ fun VlcVideoPlayer(
         }
     }
 
-    LaunchedEffect(isBuffering) {
-        if (isBuffering) {
-            isControlsVisible = true
-        }
-    }
-
     LaunchedEffect(isPipMode) {
         if (isPipMode) {
             isControlsVisible = false
         }
     }
 
+    // Back closes whatever is on top first. A locked screen stays locked until slid open.
+    BackHandler(enabled = isScreenLocked || openSheet != PlayerSheet.None || showEpisodesPanel) {
+        when {
+            isScreenLocked -> isUnlockPromptVisible = true
+            openSheet != PlayerSheet.None -> openSheet = PlayerSheet.None
+            else -> showEpisodesPanel = false
+        }
+    }
+
     val playerFocusRequester = remember { FocusRequester() }
-    
+
     LaunchedEffect(Unit) {
         playerFocusRequester.requestFocus()
     }
 
-    var vlcLayoutRef by remember { mutableStateOf<VLCVideoLayout?>(null) }
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
-                    if (!isPipMode && isPlaying) {
+                    // Picture-in-picture only reaches this point once its window is closed.
+                    if (isPlaying) {
                         mediaPlayer.pause()
-                    }
-                }
-                androidx.lifecycle.Lifecycle.Event.ON_START,
-                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
-                    vlcLayoutRef?.let { layout ->
-                        layout.post {
-                            try {
-                                mediaPlayer.detachViews()
-                                mediaPlayer.attachViews(layout, null, true, false)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
                     }
                 }
                 else -> {}
@@ -456,6 +403,15 @@ fun VlcVideoPlayer(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .pointerInput(Unit) {
+                // Watches every touch on its way to the controls without consuming it.
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        interactionTick++
+                    }
+                }
+            }
             .focusRequester(playerFocusRequester)
             .focusable()
             .onKeyEvent { event ->
@@ -510,66 +466,7 @@ fun VlcVideoPlayer(
             }
     ) {
         AndroidView(
-            factory = { ctx ->
-                VLCVideoLayout(ctx).apply {
-                    vlcLayoutRef = this
-                    mediaPlayer.attachViews(this, null, true, false)
-                    addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
-                        override fun onViewAttachedToWindow(v: android.view.View) {
-                            post {
-                                try {
-                                    mediaPlayer.detachViews()
-                                    mediaPlayer.attachViews(this@apply, null, true, false)
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }
-                        }
-                        override fun onViewDetachedFromWindow(v: android.view.View) {
-                            try {
-                                mediaPlayer.detachViews()
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
-                    })
-
-                    // SurfaceView recreation handler for screen lock / unlock
-                    post {
-                        val surfaceView = (0 until childCount).mapNotNull { getChildAt(it) as? SurfaceView }.firstOrNull()
-                        surfaceView?.holder?.addCallback(object : android.view.SurfaceHolder.Callback {
-                            override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                                post {
-                                    try {
-                                        mediaPlayer.detachViews()
-                                        mediaPlayer.attachViews(this@apply, null, true, false)
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                }
-                            }
-                            override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {}
-                            override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
-                                try {
-                                    mediaPlayer.detachViews()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }
-                        })
-                    }
-                }
-            },
-            update = { videoLayout ->
-                when (resizeMode) {
-                    "FIT" -> mediaPlayer.videoScale = MediaPlayer.ScaleType.SURFACE_BEST_FIT
-                    "FILL" -> {
-                        mediaPlayer.aspectRatio = null
-                        mediaPlayer.videoScale = MediaPlayer.ScaleType.SURFACE_FILL 
-                    }
-                    "ZOOM" -> mediaPlayer.videoScale = MediaPlayer.ScaleType.SURFACE_FIT_SCREEN
-                }
-            },
+            factory = { mediaPlayer.view },
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(
@@ -586,223 +483,245 @@ fun VlcVideoPlayer(
                     }
                 }
         )
-        
+
         val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
         val maxVolume = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
         var currentVolume by remember { mutableStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)) }
-        
+        var volumeLevel by remember { mutableStateOf(0f) }
+
         val window = (context as? ComponentActivity)?.window
-        var currentBrightness by remember { mutableStateOf(window?.attributes?.screenBrightness ?: 0.5f) }
-        
+        var currentBrightness by remember { mutableStateOf(startingBrightness(context, window)) }
+
         var showVolumeIndicator by remember { mutableStateOf(false) }
         var showBrightnessIndicator by remember { mutableStateOf(false) }
-        var volumeDragAccumulator by remember { mutableStateOf(0f) }
-        
+
         // Horizontal seek state
         var seekDragAccumulator by remember { mutableStateOf(0f) }
         var showSeekIndicator by remember { mutableStateOf(false) }
         var seekDelta by remember { mutableStateOf(0L) }
+        var isSeekDragging by remember { mutableStateOf(false) }
 
-        LaunchedEffect(showVolumeIndicator) {
-            if (showVolumeIndicator) {
-                delay(2000)
+        var doubleTapSide by remember { mutableStateOf(0) }
+        var doubleTapSeconds by remember { mutableStateOf(0) }
+        var isHoldingForSpeed by remember { mutableStateOf(false) }
+        var showZoomMessage by remember { mutableStateOf(false) }
+
+        // Every gesture update restarts this, so indicators stay during a swipe and leave right after it.
+        var gestureTick by remember { mutableStateOf(0) }
+        LaunchedEffect(gestureTick) {
+            if (gestureTick > 0) {
+                delay(GESTURE_INDICATOR_LINGER_MS)
                 showVolumeIndicator = false
-            }
-        }
-        LaunchedEffect(showBrightnessIndicator) {
-            if (showBrightnessIndicator) {
-                delay(2000)
                 showBrightnessIndicator = false
-            }
-        }
-        LaunchedEffect(showSeekIndicator) {
-            if (showSeekIndicator) {
-                delay(1500)
-                showSeekIndicator = false
-                seekDelta = 0L
+                showZoomMessage = false
+                doubleTapSide = 0
+                doubleTapSeconds = 0
+                if (!isSeekDragging) {
+                    showSeekIndicator = false
+                    seekDelta = 0L
+                }
             }
         }
 
-        // Gesture Areas
-        Row(modifier = Modifier.fillMaxSize()) {
-            // Left Half: Brightness (vertical) + Seek (horizontal)
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                if (!isScreenLocked) {
-                                    mediaPlayer.time = (mediaPlayer.time - 10000).coerceAtLeast(0)
-                                    isControlsVisible = true
-                                } else {
-                                    isUnlockPromptVisible = true
-                                }
-                            },
-                            onTap = {
-                                if (isScreenLocked) {
-                                    isUnlockPromptVisible = !isUnlockPromptVisible
-                                } else if (showEpisodesPanel) {
-                                    showEpisodesPanel = false
-                                } else {
-                                    isControlsVisible = !isControlsVisible
-                                }
-                            }
-                        )
-                    }
-                    .pointerInput(isScreenLocked) {
-                        if (!isScreenLocked) {
-                            var totalDx = 0f
-                            var totalDy = 0f
-                            var isVertical: Boolean? = null
-                            detectDragGestures(
-                                onDragStart = {
-                                    totalDx = 0f
-                                    totalDy = 0f
-                                    isVertical = null
-                                },
-                                onDragEnd = {
-                                    if (isVertical == false && seekDelta != 0L) {
-                                        // Apply the seek
-                                        mediaPlayer.time = (mediaPlayer.time + seekDelta).coerceIn(0, mediaPlayer.length)
-                                        seekDragAccumulator = 0f
-                                    }
-                                    isVertical = null
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    totalDx += dragAmount.x
-                                    totalDy += dragAmount.y
-                                    if (isVertical == null && (kotlin.math.abs(totalDx) > 30f || kotlin.math.abs(totalDy) > 30f)) {
-                                        isVertical = kotlin.math.abs(totalDy) > kotlin.math.abs(totalDx)
-                                    }
-                                    if (isVertical == true) {
-                                        // Brightness
-                                        val delta = -(dragAmount.y / 1500f)
-                                        currentBrightness = (currentBrightness + delta).coerceIn(0f, 1f)
-                                        window?.let { w ->
-                                            val attrs = w.attributes
-                                            attrs.screenBrightness = currentBrightness
-                                            w.attributes = attrs
-                                        }
-                                        showBrightnessIndicator = true
-                                    } else if (isVertical == false) {
-                                        // Horizontal seek
-                                        seekDragAccumulator += dragAmount.x
-                                        val seekMs = (seekDragAccumulator / 3f).toLong() * 100L // ~100ms per 3px
-                                        seekDelta = seekMs
-                                        showSeekIndicator = true
-                                    }
-                                }
-                            )
-                        }
-                    }
-            ) {
-                if (showBrightnessIndicator && !isScreenLocked) {
-                    Box(modifier = Modifier.align(Alignment.Center)) {
-                        PlayerLevelIndicator(
-                            icon = { BrightnessIcon(modifier = Modifier.size(20.dp), color = Color.White) },
-                            percent = (currentBrightness * 100).toInt()
-                        )
-                    }
-                }
+        var zoomScale by remember { mutableStateOf(1f) }
+        var seekStartMs by remember { mutableStateOf(0L) }
+        val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+        fun changeBrightness(change: Float) {
+            currentBrightness = (currentBrightness + change).coerceIn(MIN_BRIGHTNESS, 1f)
+            window?.let { w ->
+                val attrs = w.attributes
+                attrs.screenBrightness = currentBrightness
+                w.attributes = attrs
             }
-            // Right Half: Volume (vertical) + Seek (horizontal)
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                if (!isScreenLocked) {
-                                    mediaPlayer.time = (mediaPlayer.time + 10000).coerceAtMost(mediaPlayer.length)
-                                    isControlsVisible = true
-                                } else {
-                                    isUnlockPromptVisible = true
-                                }
-                            },
-                            onTap = {
-                                if (isScreenLocked) {
-                                    isUnlockPromptVisible = !isUnlockPromptVisible
-                                } else if (showEpisodesPanel) {
-                                    showEpisodesPanel = false
-                                } else {
-                                    isControlsVisible = !isControlsVisible
-                                }
-                            }
-                        )
-                    }
-                    .pointerInput(isScreenLocked) {
-                        if (!isScreenLocked) {
-                            var totalDx = 0f
-                            var totalDy = 0f
-                            var isVertical: Boolean? = null
-                            detectDragGestures(
-                                onDragStart = {
-                                    totalDx = 0f
-                                    totalDy = 0f
-                                    isVertical = null
-                                },
-                                onDragEnd = {
-                                    if (isVertical == false && seekDelta != 0L) {
-                                        mediaPlayer.time = (mediaPlayer.time + seekDelta).coerceIn(0, mediaPlayer.length)
-                                        seekDragAccumulator = 0f
-                                    }
-                                    isVertical = null
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    totalDx += dragAmount.x
-                                    totalDy += dragAmount.y
-                                    if (isVertical == null && (kotlin.math.abs(totalDx) > 30f || kotlin.math.abs(totalDy) > 30f)) {
-                                        isVertical = kotlin.math.abs(totalDy) > kotlin.math.abs(totalDx)
-                                    }
-                                    if (isVertical == true) {
-                                        // Volume
-                                        volumeDragAccumulator -= dragAmount.y
-                                        val threshold = 50f
-                                        if (kotlin.math.abs(volumeDragAccumulator) > threshold) {
-                                            val volDelta = if (volumeDragAccumulator > 0) 1 else -1
-                                            volumeDragAccumulator = 0f
-                                            val newVol = (audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) + volDelta).coerceIn(0, maxVolume)
-                                            audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
-                                            currentVolume = newVol
-                                            showVolumeIndicator = true
-                                        }
-                                    } else if (isVertical == false) {
-                                        // Horizontal seek
-                                        seekDragAccumulator += dragAmount.x
-                                        val seekMs = (seekDragAccumulator / 3f).toLong() * 100L
-                                        seekDelta = seekMs
-                                        showSeekIndicator = true
-                                    }
-                                }
-                            )
-                        }
-                    }
-            ) {
-                if (showVolumeIndicator && !isScreenLocked) {
-                    val volPercent = if (maxVolume > 0) (currentVolume * 100 / maxVolume) else 0
-                    Box(modifier = Modifier.align(Alignment.Center)) {
-                        PlayerLevelIndicator(
-                            icon = { VolumeIcon(level = volPercent / 100f, modifier = Modifier.size(20.dp), color = Color.White) },
-                            percent = volPercent
-                        )
-                    }
-                }
-            }
+            showBrightnessIndicator = true
         }
-        
-        // Seek indicator overlay (centered)
-        AnimatedVisibility(
-            visible = showSeekIndicator && !isPipMode,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
-            PlayerSeekIndicator(deltaMs = seekDelta)
+
+        fun changeVolume(change: Float) {
+            if (!showVolumeIndicator && maxVolume > 0) {
+                // The phone's volume buttons may have moved it since the last swipe.
+                volumeLevel = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) / maxVolume.toFloat()
+            }
+            volumeLevel = (volumeLevel + change).coerceIn(0f, 1f)
+            val newVolume = kotlin.math.round(volumeLevel * maxVolume).toInt()
+            if (newVolume != currentVolume) {
+                audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVolume, 0)
+                currentVolume = newVolume
+            }
+            showVolumeIndicator = true
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    // Two fingers zoom. Runs first so the taps and swipes below never see them.
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            if (!isScreenLocked && event.changes.count { it.pressed } >= 2) {
+                                val zoom = event.calculateZoom()
+                                if (zoom != 1f) {
+                                    zoomScale = (zoomScale * zoom).coerceIn(MIN_ZOOM, MAX_ZOOM)
+                                    mediaPlayer.setZoom(zoomScale)
+                                    showZoomMessage = true
+                                    gestureTick++
+                                }
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            tryAwaitRelease()
+                            if (isHoldingForSpeed) {
+                                isHoldingForSpeed = false
+                                mediaPlayer.setSpeed(playbackSpeed)
+                            }
+                        },
+                        onLongPress = {
+                            if (!isScreenLocked && isPlaying) {
+                                isHoldingForSpeed = true
+                                isControlsVisible = false
+                                mediaPlayer.setSpeed(HOLD_SPEED)
+                                haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            }
+                        },
+                        onDoubleTap = { position ->
+                            if (isScreenLocked) {
+                                isUnlockPromptVisible = true
+                            } else {
+                                val side = when {
+                                    position.x < size.width * DOUBLE_TAP_SIDE_FRACTION -> -1
+                                    position.x > size.width * (1f - DOUBLE_TAP_SIDE_FRACTION) -> 1
+                                    else -> 0
+                                }
+                                if (side == 0) {
+                                    if (isPlaying) mediaPlayer.pause() else mediaPlayer.play()
+                                } else {
+                                    mediaPlayer.time = (mediaPlayer.time + side * DOUBLE_TAP_SEEK_MS).coerceIn(0, mediaPlayer.length)
+                                    // Repeated double-taps add up, and the video stays uncovered.
+                                    doubleTapSeconds = if (doubleTapSide == side) {
+                                        doubleTapSeconds + (DOUBLE_TAP_SEEK_MS / 1000).toInt()
+                                    } else {
+                                        (DOUBLE_TAP_SEEK_MS / 1000).toInt()
+                                    }
+                                    doubleTapSide = side
+                                    gestureTick++
+                                }
+                            }
+                        },
+                        onTap = {
+                            if (isScreenLocked) {
+                                isUnlockPromptVisible = !isUnlockPromptVisible
+                            } else if (showEpisodesPanel || openSheet != PlayerSheet.None) {
+                                showEpisodesPanel = false
+                                openSheet = PlayerSheet.None
+                            } else {
+                                isControlsVisible = !isControlsVisible
+                            }
+                        }
+                    )
+                }
+                .pointerInput(isScreenLocked) {
+                    if (!isScreenLocked) {
+                        var totalDx = 0f
+                        var totalDy = 0f
+                        var isVertical: Boolean? = null
+                        var startedAtEdge = false
+                        var startedOnLeft = false
+                        fun finishDrag(applySeek: Boolean) {
+                            if (isSeekDragging) {
+                                val target = if (applySeek) seekStartMs + seekDelta else seekStartMs
+                                mediaPlayer.time = target.coerceIn(0, mediaPlayer.length)
+                            }
+                            isSeekDragging = false
+                            isVertical = null
+                            gestureTick++
+                        }
+                        detectDragGestures(
+                            onDragStart = { start ->
+                                totalDx = 0f
+                                totalDy = 0f
+                                isVertical = null
+                                seekDragAccumulator = 0f
+                                startedOnLeft = start.x < size.width / 2
+                                // Screen edges belong to the system bars and gesture navigation.
+                                startedAtEdge = start.y < size.height * SCREEN_EDGE_FRACTION ||
+                                    start.y > size.height * (1f - SCREEN_EDGE_FRACTION)
+                            },
+                            onDragEnd = { finishDrag(applySeek = true) },
+                            onDragCancel = { finishDrag(applySeek = false) },
+                            onDrag = { change, dragAmount ->
+                                if (!startedAtEdge) {
+                                    change.consume()
+                                    totalDx += dragAmount.x
+                                    totalDy += dragAmount.y
+                                    if (isVertical == null && (kotlin.math.abs(totalDx) > 24f || kotlin.math.abs(totalDy) > 24f)) {
+                                        isVertical = kotlin.math.abs(totalDy) > kotlin.math.abs(totalDx)
+                                        if (isVertical == false) seekStartMs = mediaPlayer.time
+                                    }
+                                    if (isVertical == true) {
+                                        val level = -dragAmount.y / size.height * VERTICAL_SWIPE_GAIN
+                                        if (startedOnLeft) changeBrightness(level) else changeVolume(level)
+                                        gestureTick++
+                                    } else if (isVertical == false) {
+                                        isSeekDragging = true
+                                        seekDragAccumulator += dragAmount.x
+                                        // A full screen width is two minutes, in whole seconds.
+                                        seekDelta = (seekDragAccumulator / size.width * FULL_WIDTH_SEEK_MS).toLong() / 1000L * 1000L
+                                        mediaPlayer.previewSeek((seekStartMs + seekDelta).coerceIn(0, mediaPlayer.length))
+                                        showSeekIndicator = true
+                                        gestureTick++
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+        )
+
+        if (doubleTapSide != 0 && !isPipMode) {
+            DoubleTapSeekOval(
+                forward = doubleTapSide > 0,
+                seconds = doubleTapSeconds,
+                modifier = Modifier.align(if (doubleTapSide > 0) Alignment.CenterEnd else Alignment.CenterStart)
+            )
+        }
+
+        // Each slider sits opposite its swiping thumb, so the thumb never covers it.
+        if (showBrightnessIndicator && !isScreenLocked) {
+            LevelSlider(
+                icon = Icons.Outlined.BrightnessMedium,
+                percent = (currentBrightness * 100).toInt(),
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 28.dp)
+            )
+        }
+        if (showVolumeIndicator && !isScreenLocked) {
+            LevelSlider(
+                icon = Icons.Outlined.VolumeUp,
+                percent = if (maxVolume > 0) currentVolume * 100 / maxVolume else 0,
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = 28.dp)
+            )
+        }
+
+        val gestureMessage = when {
+            isHoldingForSpeed -> "${HOLD_SPEED.toInt()}x"
+            showSeekIndicator && isSeekDragging -> {
+                val sign = if (seekDelta >= 0) "+" else "-"
+                "${formatTime((seekStartMs + seekDelta).coerceIn(0, totalDuration))}  [$sign${kotlin.math.abs(seekDelta) / 1000}s]"
+            }
+            showZoomMessage -> "Zoom ${String.format(java.util.Locale.US, "%.1f", zoomScale)}x"
+            else -> null
+        }
+        if (gestureMessage != null && !isPipMode) {
+            GestureMessage(
+                text = gestureMessage,
+                showFastForward = isHoldingForSpeed,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp)
+            )
         }
 
         val currentEpisodeInfo = remember(seasons, currentStreamUrl) {
@@ -810,8 +729,8 @@ fun VlcVideoPlayer(
             else {
                 var matchPair: Pair<com.potflix.domain.model.Season, com.potflix.domain.model.Episode>? = null
                 for (season in seasons) {
-                    val ep = season.episodes.find { 
-                        it.url == currentStreamUrl || 
+                    val ep = season.episodes.find {
+                        it.url == currentStreamUrl ||
                         currentStreamUrl.endsWith(it.url.substringAfterLast("/")) ||
                         it.url.substringAfterLast("/") == currentStreamUrl.substringAfterLast("/")
                     }
@@ -841,578 +760,218 @@ fun VlcVideoPlayer(
             }
         }
 
-        // Screen Lock Floating Unlock Button
         AnimatedVisibility(
             visible = isScreenLocked && isUnlockPromptVisible && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 36.dp)
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 28.dp)
         ) {
-            Button(
-                onClick = {
-                    isScreenLocked = false
-                    isUnlockPromptVisible = false
-                    isControlsVisible = true
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Black.copy(alpha = 0.85f),
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
-                modifier = Modifier.sizeIn(minWidth = 56.dp, minHeight = 56.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.LockOpen,
-                    contentDescription = "Unlock Screen",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Tap to Unlock",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp
-                )
+            SlideToUnlock(onUnlock = {
+                isScreenLocked = false
+                isUnlockPromptVisible = false
+                isControlsVisible = true
+            })
+        }
+
+        val allEpisodes = remember(seasons) { seasons.flatMap { it.episodes } }
+        val exactEpisodeIndex = allEpisodes.indexOfFirst { it.url == currentStreamUrl }
+        val episodeIndex = if (exactEpisodeIndex >= 0) {
+            exactEpisodeIndex
+        } else {
+            currentEpisodeInfo?.let { allEpisodes.indexOf(it.second) } ?: -1
+        }
+        val previousEpisode = allEpisodes.getOrNull(episodeIndex - 1).takeIf { episodeIndex > 0 }
+        val nextEpisode = allEpisodes.getOrNull(episodeIndex + 1).takeIf { episodeIndex >= 0 }
+        val cachedTime by mediaPlayer.cachedTimeMs
+
+        val playbackEnded by mediaPlayer.playbackEnded
+        var nextEpisodeCancelled by remember { mutableStateOf(false) }
+        var nextEpisodeCountdown by remember { mutableStateOf<Int?>(null) }
+
+        LaunchedEffect(playbackEnded, nextEpisode, nextEpisodeCancelled) {
+            nextEpisodeCountdown = null
+            if (!playbackEnded) {
+                nextEpisodeCancelled = false
+                return@LaunchedEffect
+            }
+            val next = nextEpisode
+            if (next == null || nextEpisodeCancelled) {
+                isControlsVisible = !isScreenLocked
+                return@LaunchedEffect
+            }
+            for (seconds in NEXT_EPISODE_COUNTDOWN_SECONDS downTo 1) {
+                nextEpisodeCountdown = seconds
+                delay(1000L)
+            }
+            nextEpisodeCountdown = null
+            // Someone who closed the player window should not have the next episode start unseen.
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                playEpisode(next.url, next.title)
             }
         }
 
-        // Custom Modern Controls Overlay (Disappears after 2-3s inactivity)
         AnimatedVisibility(
-            visible = isControlsVisible && !isScreenLocked,
+            visible = isControlsVisible && !isScreenLocked && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-            ) {
-                // Top Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
-                        .align(Alignment.TopStart),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { (context as? ComponentActivity)?.finish() },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(Color.White.copy(alpha = 0.12f), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-
-                    val baseSeriesName = remember(title) {
-                        title.substringBefore(" • ").substringBefore(" - Season").substringBefore(" - Episode").trim()
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        Text(
-                            text = if (currentEpisodeInfo != null) baseSeriesName else currentTitle,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        if (currentEpisodeInfo != null) {
-                            val (season, episode) = currentEpisodeInfo
-                            val sNum = season.number.takeIf { it > 0 } ?: Regex("\\d+").find(season.name)?.value?.toIntOrNull() ?: 1
-                            val epNum = episode.number.takeIf { (it ?: 0) > 0 } ?: Regex("E(\\d+)", RegexOption.IGNORE_CASE).find(episode.url)?.groupValues?.get(1)?.toIntOrNull()
-                            val epCode = if (epNum != null) "S${sNum.toString().padStart(2, '0')}E${epNum.toString().padStart(2, '0')}" else season.name
-                            val epName = if (!episode.title.startsWith("Episode ", ignoreCase = true) && !episode.title.contains(".mkv", ignoreCase = true) && !episode.title.contains(".mp4", ignoreCase = true) && episode.title.isNotBlank()) {
-                                ": ${episode.title}"
-                            } else if (epNum != null) {
-                                " • Episode $epNum"
-                            } else ""
-
-                            Text(
-                                text = "$epCode$epName",
-                                color = Color.White.copy(alpha = 0.75f),
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    // Aspect Ratio mode indicator in top right
-                    PlayerControlChip(
-                        text = resizeMode,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.AspectRatio,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        isActive = false,
-                        onClick = {
-                            resizeMode = when (resizeMode) {
-                                "FIT" -> "FILL"
-                                "FILL" -> "ZOOM"
-                                else -> "FIT"
-                            }
-                        }
-                    )
-                }
-
-                // Lower-Third Thumb-Zone Deck (High-frequency controls within natural thumb reach)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.75f),
-                                    Color.Black.copy(alpha = 0.94f)
-                                )
-                            )
-                        )
-                        .padding(horizontal = 24.dp, vertical = 12.dp)
-                ) {
-                    // Visual Seeking Hovering Preview Card
-                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                        val density = LocalDensity.current
-                        val cardWidth = 148.dp
-                        val containerWidthPx = with(density) { maxWidth.toPx() }
-                        val cardWidthPx = with(density) { cardWidth.toPx() }
-                        val currentFraction = if (isDraggingTimeline) dragFraction
-                            else if (totalDuration > 0) (currentTime.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-                            else 0f
-                        val offsetDp = with(density) {
-                            ((containerWidthPx * currentFraction) - (cardWidthPx / 2f))
-                                .coerceIn(0f, (containerWidthPx - cardWidthPx).coerceAtLeast(0f))
-                                .toDp()
-                        }
-
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = isDraggingTimeline,
-                            enter = fadeIn(),
-                            exit = fadeOut(),
-                            modifier = Modifier.padding(start = offsetDp, bottom = 4.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color(0xF0181824),
-                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-                                shadowElevation = 8.dp,
-                                modifier = Modifier.width(cardWidth)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    // Thumbnail preview placeholder badge
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(60.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color.Black.copy(alpha = 0.65f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Movie,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = formatTime(dragPositionMs),
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                    val diffMs = dragPositionMs - currentTime
-                                    val diffSign = if (diffMs >= 0) "+" else "-"
-                                    val diffText = "$diffSign${formatTime(kotlin.math.abs(diffMs))}"
-                                    Text(
-                                        text = diffText,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Timeline Scrubber Row with generous touch target (min 48dp height)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = formatTime(if (isDraggingTimeline) dragPositionMs else currentTime),
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Slider(
-                            value = if (isDraggingTimeline) dragFraction
-                                else if (totalDuration > 0) (currentTime.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-                                else 0f,
-                            onValueChange = { value ->
-                                isDraggingTimeline = true
-                                dragFraction = value
-                                dragPositionMs = (value * totalDuration).toLong().coerceIn(0L, totalDuration)
-                            },
-                            onValueChangeFinished = {
-                                mediaPlayer.time = dragPositionMs
-                                currentTime = dragPositionMs
-                                isDraggingTimeline = false
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 48.dp)
-                                .padding(horizontal = 12.dp),
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                            )
-                        )
-                        Text(
-                            text = formatTime(totalDuration),
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    // Thumb-Zone Controls Row (Generous >=48x48 dp hitboxes, reachable by thumbs)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Left Thumb-Zone: Screen Lock & Rotation Lock
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Prominent Screen Lock Button
-                            IconButton(
-                                onClick = {
-                                    isScreenLocked = true
-                                    isControlsVisible = false
-                                    isUnlockPromptVisible = true
-                                },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(Color.White.copy(alpha = 0.12f), CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Lock,
-                                    contentDescription = "Lock Screen",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-
-                            // Explicit Rotation Lock Toggle
-                            IconButton(
-                                onClick = {
-                                    isRotationLocked = !isRotationLocked
-                                    activity?.requestedOrientation = if (isRotationLocked) {
-                                        ActivityInfo.SCREEN_ORIENTATION_LOCKED
-                                    } else {
-                                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(
-                                        if (isRotationLocked) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                                        else Color.White.copy(alpha = 0.12f),
-                                        CircleShape
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = if (isRotationLocked) Icons.Filled.ScreenLockRotation else Icons.Filled.ScreenRotation,
-                                    contentDescription = if (isRotationLocked) "Rotation Locked" else "Auto-Rotation Enabled",
-                                    tint = if (isRotationLocked) MaterialTheme.colorScheme.primary else Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-
-                        // Center Thumb-Zone: Skip -10s, Play/Pause/Buffer, Skip +10s
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Skip 10s Backward
-                            IconButton(
-                                onClick = { mediaPlayer.time = (mediaPlayer.time - 10000).coerceAtLeast(0) },
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .background(Color.White.copy(alpha = 0.14f), CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Replay10,
-                                    contentDescription = "Rewind 10 Seconds",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(30.dp)
-                                )
-                            }
-
-                            // Play / Pause / Buffering Spinner
-                            if (isBuffering) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .background(Color.Black.copy(alpha = 0.65f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(38.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        strokeWidth = 3.5.dp
-                                    )
-                                }
-                            } else {
-                                IconButton(
-                                    onClick = {
-                                        if (isPlaying) mediaPlayer.pause() else mediaPlayer.play()
-                                    },
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .background(MaterialTheme.colorScheme.primary, CircleShape)
-                                ) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                        contentDescription = if (isPlaying) "Pause" else "Play",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(38.dp)
-                                    )
-                                }
-                            }
-
-                            // Skip 10s Forward
-                            IconButton(
-                                onClick = { mediaPlayer.time = (mediaPlayer.time + 10000).coerceAtMost(mediaPlayer.length) },
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .background(Color.White.copy(alpha = 0.14f), CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Forward10,
-                                    contentDescription = "Skip 10 Seconds",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(30.dp)
-                                )
-                            }
-                        }
-
-                        // Right Thumb-Zone: Subtitles, Audio, Episodes (min 48x48 dp hitboxes)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Subtitles
-                            Box {
-                                IconButton(
-                                    onClick = {
-                                        spuTracks = mediaPlayer.spuTracks?.toList() ?: emptyList()
-                                        selectedSpuTrack = mediaPlayer.spuTrack
-                                        showSpuMenu = true
-                                    },
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .background(
-                                            if (showSpuMenu || selectedSpuTrack != -1) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                                            else Color.White.copy(alpha = 0.12f),
-                                            CircleShape
-                                        )
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Subtitles,
-                                        contentDescription = "Subtitles",
-                                        tint = if (selectedSpuTrack != -1) MaterialTheme.colorScheme.primary else Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                DropdownMenu(
-                                    expanded = showSpuMenu,
-                                    onDismissRequest = { showSpuMenu = false },
-                                    modifier = Modifier.background(Color(0xFF1E1E28), RoundedCornerShape(12.dp))
-                                ) {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                "Disable Subtitles",
-                                                color = if (selectedSpuTrack == -1) MaterialTheme.colorScheme.primary else Color.White,
-                                                fontWeight = if (selectedSpuTrack == -1) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        },
-                                        onClick = {
-                                            mediaPlayer.spuTrack = -1
-                                            selectedSpuTrack = -1
-                                            showSpuMenu = false
-                                        }
-                                    )
-                                    val validTracks = spuTracks.filter { it.id != -1 && !it.name.contains("disable", ignoreCase = true) }
-                                    if (validTracks.isNotEmpty()) {
-                                        validTracks.forEach { track ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        track.name,
-                                                        color = if (selectedSpuTrack == track.id) MaterialTheme.colorScheme.primary else Color.White,
-                                                        fontWeight = if (selectedSpuTrack == track.id) FontWeight.Bold else FontWeight.Normal
-                                                    )
-                                                },
-                                                onClick = {
-                                                    mediaPlayer.spuTrack = track.id
-                                                    selectedSpuTrack = track.id
-                                                    showSpuMenu = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                    DropdownMenuItem(
-                                        text = { Text("Load Local Subtitle File...", color = Color.White) },
-                                        onClick = {
-                                            showSpuMenu = false
-                                            subtitleLauncher.launch("*/*")
-                                        }
-                                    )
-                                }
-                            }
-
-                            // Audio
-                            if (audioTracks.isNotEmpty()) {
-                                Box {
-                                    IconButton(
-                                        onClick = {
-                                            audioTracks = mediaPlayer.audioTracks?.toList() ?: emptyList()
-                                            selectedAudioTrack = mediaPlayer.audioTrack
-                                            showAudioMenu = true
-                                        },
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .background(
-                                                if (showAudioMenu) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                                                else Color.White.copy(alpha = 0.12f),
-                                                CircleShape
-                                            )
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Audiotrack,
-                                            contentDescription = "Audio Track",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                    DropdownMenu(
-                                        expanded = showAudioMenu,
-                                        onDismissRequest = { showAudioMenu = false },
-                                        modifier = Modifier.background(Color(0xFF1E1E28), RoundedCornerShape(12.dp))
-                                    ) {
-                                        audioTracks.forEach { track ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        track.name,
-                                                        color = if (selectedAudioTrack == track.id) MaterialTheme.colorScheme.primary else Color.White,
-                                                        fontWeight = if (selectedAudioTrack == track.id) FontWeight.Bold else FontWeight.Normal
-                                                    )
-                                                },
-                                                onClick = {
-                                                    mediaPlayer.audioTrack = track.id
-                                                    selectedAudioTrack = track.id
-                                                    showAudioMenu = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Episodes Side Panel Trigger (Series only)
-                            if (seasons.isNotEmpty()) {
-                                IconButton(
-                                    onClick = {
-                                        showEpisodesPanel = !showEpisodesPanel
-                                        isControlsVisible = false
-                                    },
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .background(
-                                            if (showEpisodesPanel) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                                            else Color.White.copy(alpha = 0.12f),
-                                            CircleShape
-                                        )
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.VideoLibrary,
-                                        contentDescription = "Episodes",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+            val baseSeriesName = remember(title) {
+                title.substringBefore(" • ").substringBefore(" - Season").substringBefore(" - Episode").trim()
             }
+            val episodeLabel = currentEpisodeInfo?.let { (season, episode) ->
+                val seasonNumber = season.number.takeIf { it > 0 } ?: Regex("\\d+").find(season.name)?.value?.toIntOrNull() ?: 1
+                // A number shared by several files can't tell them apart, so the list position is used instead.
+                val parsedNumber = episode.number?.takeIf { number ->
+                    number > 0 && season.episodes.count { it.number == number } == 1
+                }
+                val episodeNumber = parsedNumber ?: (season.episodes.indexOf(episode) + 1).takeIf { it > 0 }
+                val code = if (episodeNumber != null) {
+                    "S${seasonNumber.toString().padStart(2, '0')}E${episodeNumber.toString().padStart(2, '0')}"
+                } else {
+                    season.name
+                }
+                val isRealName = episode.title.isNotBlank() && !episode.title.startsWith("Episode ", ignoreCase = true) &&
+                    !episode.title.contains(".mkv", ignoreCase = true) && !episode.title.contains(".mp4", ignoreCase = true)
+                if (isRealName) "$code: ${episode.title}" else code
+            }
+            PlayerControlsOverlay(
+                title = if (currentEpisodeInfo != null) baseSeriesName else currentTitle,
+                subtitle = episodeLabel,
+                isPlaying = isPlaying,
+                isBuffering = isBuffering,
+                currentTimeMs = currentTime,
+                durationMs = totalDuration,
+                cachedTimeMs = cachedTime,
+                scrubFraction = if (isDraggingTimeline) dragFraction else null,
+                isPortrait = isPortrait,
+                speed = playbackSpeed,
+                hasAudioChoices = audioTracks.isNotEmpty(),
+                subtitlesOn = selectedSpuTrack != -1,
+                actions = PlayerControlsActions(
+                    onBack = { (context as? ComponentActivity)?.finish() },
+                    onPlayPause = { if (isPlaying) mediaPlayer.pause() else mediaPlayer.play() },
+                    onPrevious = previousEpisode?.let { episode -> { playEpisode(episode.url, episode.title) } },
+                    onNext = nextEpisode?.let { episode -> { playEpisode(episode.url, episode.title) } },
+                    onOpenSheet = {
+                        openSheet = it
+                        isControlsVisible = false
+                    },
+                    onEpisodes = if (seasons.isNotEmpty()) {
+                        {
+                            showEpisodesPanel = true
+                            isControlsVisible = false
+                        }
+                    } else {
+                        null
+                    },
+                    onLock = {
+                        isScreenLocked = true
+                        isControlsVisible = false
+                        isUnlockPromptVisible = true
+                    },
+                    onToggleOrientation = {
+                        isPortrait = !isPortrait
+                        activity?.requestedOrientation = if (isPortrait) {
+                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                        } else {
+                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        }
+                    },
+                    onPictureInPicture = { (context as? PlayerActivity)?.enterPictureInPicture() },
+                    onScrub = { fraction ->
+                        isDraggingTimeline = true
+                        dragFraction = fraction
+                        dragPositionMs = (fraction * totalDuration).toLong().coerceIn(0L, totalDuration)
+                    },
+                    onScrubEnd = {
+                        mediaPlayer.time = dragPositionMs
+                        isDraggingTimeline = false
+                    }
+                )
+            )
         }
 
         // Next Episode Button overlay
-        val isNextEpisodeVisible = remember(totalDuration, currentTime, seasons) {
-            seasons.isNotEmpty() && totalDuration > 0 && (totalDuration - currentTime <= 120_000L)
-        }
+        val isNextEpisodeVisible = nextEpisode != null && nextEpisodeCountdown == null &&
+            totalDuration > 0 && (totalDuration - currentTime <= 120_000L)
         AnimatedVisibility(
             visible = isNextEpisodeVisible && !isPipMode,
             enter = fadeIn() + androidx.compose.animation.slideInVertically(initialOffsetY = { 50 }),
             exit = fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 96.dp, end = 32.dp)
+                .padding(bottom = 116.dp, end = 24.dp)
         ) {
             Button(
-                onClick = {
-                    val allEps = seasons.flatMap { it.episodes }
-                    val index = allEps.indexOfFirst { it.url == currentStreamUrl }
-                    if (index != -1 && index + 1 < allEps.size) {
-                        val nextEp = allEps[index + 1]
-                        playEpisode(nextEp.url, nextEp.title)
-                    }
-                },
+                onClick = { nextEpisode?.let { playEpisode(it.url, it.title) } },
                 modifier = Modifier.heightIn(min = 48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text("Next Episode", color = Color.White)
             }
         }
+
+        nextEpisodeCountdown?.let { seconds ->
+            if (!isPipMode && !isScreenLocked) {
+                NextEpisodeCountdown(
+                    seconds = seconds,
+                    onPlayNow = { nextEpisode?.let { playEpisode(it.url, it.title) } },
+                    onCancel = { nextEpisodeCancelled = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 116.dp, end = 24.dp)
+                )
+            }
+        }
+
+        PlayerSheets(
+            sheet = openSheet,
+            audioTracks = audioTracks,
+            selectedAudio = selectedAudioTrack,
+            onSelectAudio = { mediaPlayer.audioTrack = it },
+            audioDelayMs = audioDelayMs,
+            onAudioDelayChange = {
+                audioDelayMs = it
+                mediaPlayer.setAudioDelayMs(it)
+            },
+            subtitleTracks = spuTracks,
+            selectedSubtitle = selectedSpuTrack,
+            onSelectSubtitle = { mediaPlayer.spuTrack = it },
+            onAddSubtitleFile = {
+                openSheet = PlayerSheet.None
+                subtitleLauncher.launch("*/*")
+            },
+            subtitleDelayMs = subtitleDelayMs,
+            onSubtitleDelayChange = {
+                subtitleDelayMs = it
+                mediaPlayer.setSubtitleDelayMs(it)
+            },
+            subtitleSizePercent = subtitleSizePercent,
+            onSubtitleSizeChange = {
+                subtitleSizePercent = it
+                playerPrefs.edit().putInt("subtitle_size", it).apply()
+                mediaPlayer.setSubtitleScale(it / 100.0)
+            },
+            speed = playbackSpeed,
+            onSpeedChange = {
+                playbackSpeed = it
+                mediaPlayer.setSpeed(it)
+            },
+            fitMode = resizeMode,
+            onFitModeChange = {
+                resizeMode = it
+                playerPrefs.edit().putString("fit_mode", it).apply()
+            },
+            hardwareDecoding = mediaPlayer.hardwareDecoding.value,
+            onHardwareDecodingChange = { mediaPlayer.setHardwareDecoding(it) },
+            onOpenSheet = {
+                openSheet = it
+                if (it != PlayerSheet.None) isControlsVisible = false
+            }
+        )
 
         // Episodes Side Panel
         AnimatedVisibility(
@@ -1483,211 +1042,74 @@ fun VlcVideoPlayer(
                 }
             }
         }
-    }
-}
 
-private fun formatTime(timeMs: Long): String {
-    val totalSeconds = timeMs / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%02d:%02d", minutes, seconds)
-    }
-}
-
-@Composable
-fun BrightnessIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        val center = Offset(size.width / 2, size.height / 2)
-        val radius = size.minDimension / 4f
-        drawCircle(color = color, radius = radius, center = center)
-        val rayLength = size.minDimension / 5.5f
-        val rayStart = radius + 3f
-        val strokeWidth = 2.5f
-        for (i in 0 until 8) {
-            val angle = i * (Math.PI / 4)
-            val startX = (center.x + rayStart * kotlin.math.cos(angle)).toFloat()
-            val startY = (center.y + rayStart * kotlin.math.sin(angle)).toFloat()
-            val endX = (center.x + (rayStart + rayLength) * kotlin.math.cos(angle)).toFloat()
-            val endY = (center.y + (rayStart + rayLength) * kotlin.math.sin(angle)).toFloat()
-            drawLine(
-                color = color,
-                start = Offset(startX, startY),
-                end = Offset(endX, endY),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
+        if (loadFailed && !isPipMode) {
+            PlayerLoadError(
+                title = currentTitle,
+                isLocalFile = currentStreamUrl.startsWith("/"),
+                onRetry = { loadAttempt++ },
+                onBack = { (context as? ComponentActivity)?.finish() }
             )
         }
     }
 }
 
-@Composable
-fun VolumeIcon(level: Float, modifier: Modifier = Modifier, color: Color = Color.White) {
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val path = androidx.compose.ui.graphics.Path().apply {
-            moveTo(w * 0.15f, h * 0.35f)
-            lineTo(w * 0.38f, h * 0.35f)
-            lineTo(w * 0.65f, h * 0.15f)
-            lineTo(w * 0.65f, h * 0.85f)
-            lineTo(w * 0.38f, h * 0.65f)
-            lineTo(w * 0.15f, h * 0.65f)
-            close()
-        }
-        drawPath(path = path, color = color)
+/** Catalogue links can hold raw spaces, which a server rejects once mpv sends them as they are. */
+private fun playableUrl(url: String): String =
+    if (url.startsWith("/")) url else Uri.encode(url, ":/?#[]@!$&'()*+,;=%-._~")
 
-        if (level > 0.05f) {
-            drawArc(
-                color = color,
-                startAngle = -45f,
-                sweepAngle = 90f,
-                useCenter = false,
-                topLeft = Offset(w * 0.48f, h * 0.25f),
-                size = Size(w * 0.38f, h * 0.5f),
-                style = Stroke(width = 2.5f, cap = StrokeCap.Round)
-            )
+/**
+ * Fetches the subtitle beside a video to a local file, because mpv's add-subtitle call
+ * blocks until the file is read and a local file keeps that from stalling the screen.
+ */
+private fun downloadServerSubtitle(context: android.content.Context, streamUrl: String): java.io.File? {
+    if (streamUrl.startsWith("/")) return null
+    return try {
+        val folderUrl = streamUrl.substringBeforeLast("/") + "/"
+        val links = org.jsoup.Jsoup.connect(folderUrl).maxBodySize(0).get().select("a[href\$=.srt]")
+            .map { it.absUrl("href") }
+        val videoName = fileNameOf(streamUrl).substringBeforeLast(".")
+        val subtitleUrl = links.firstOrNull { fileNameOf(it).startsWith(videoName) } ?: links.firstOrNull()
+        subtitleUrl?.let { url ->
+            val body = org.jsoup.Jsoup.connect(url).ignoreContentType(true).maxBodySize(0).execute().bodyAsBytes()
+            val folder = java.io.File(context.cacheDir, "subtitles").apply { mkdirs() }
+            java.io.File(folder, "server_${url.hashCode()}.srt").apply { writeBytes(body) }
         }
-        if (level > 0.5f) {
-            drawArc(
-                color = color,
-                startAngle = -45f,
-                sweepAngle = 90f,
-                useCenter = false,
-                topLeft = Offset(w * 0.62f, h * 0.12f),
-                size = Size(w * 0.52f, h * 0.76f),
-                style = Stroke(width = 2.5f, cap = StrokeCap.Round)
-            )
-        }
+    } catch (e: Exception) {
+        android.util.Log.w("PlayerActivity", "No subtitle from server", e)
+        null
     }
 }
 
-@Composable
-fun PlayerLevelIndicator(
-    icon: @Composable () -> Unit,
-    percent: Int
-) {
-    Box(
-        modifier = Modifier
-            .background(
-                color = Color(0xDD14141E),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .padding(horizontal = 18.dp, vertical = 10.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            icon()
-            Box(
-                modifier = Modifier
-                    .width(90.dp)
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Color.White.copy(alpha = 0.25f))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth((percent / 100f).coerceIn(0f, 1f))
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-            }
-            Text(
-                text = "$percent%",
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp
-            )
-        }
-    }
-}
+private fun fileNameOf(url: String): String =
+    java.net.URLDecoder.decode(url.substringAfterLast("/").replace("+", "%2B"), "UTF-8")
 
-@Composable
-fun PlayerSeekIndicator(
-    deltaMs: Long
-) {
-    val sign = if (deltaMs >= 0) "+" else "-"
-    val absSec = kotlin.math.abs(deltaMs) / 1000
-    Box(
-        modifier = Modifier
-            .background(
-                color = Color(0xDD14141E),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .padding(horizontal = 20.dp, vertical = 10.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = if (deltaMs >= 0) Icons.Filled.Forward10 else Icons.Filled.Replay10,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-            Text(
-                text = "$sign${absSec}s",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
-            )
-        }
-    }
-}
+private const val GESTURE_INDICATOR_LINGER_MS = 800L
+private const val NEXT_EPISODE_COUNTDOWN_SECONDS = 5
+private const val HOLD_SPEED = 2f
+private const val DOUBLE_TAP_SIDE_FRACTION = 0.35f
+private const val DOUBLE_TAP_SEEK_MS = 3_000L
+private val PlayerAccentBlue = Color(0xFF2F8CFF)
+private const val MIN_ZOOM = 0.5f
+private const val MAX_ZOOM = 4f
+private const val SCREEN_EDGE_FRACTION = 0.08f
+private const val VERTICAL_SWIPE_GAIN = 1.2f
+private const val FULL_WIDTH_SEEK_MS = 120_000f
+private const val MIN_BRIGHTNESS = 0.01f
 
-@Composable
-fun PlayerControlChip(
-    text: String,
-    icon: (@Composable () -> Unit)? = null,
-    isActive: Boolean = false,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(
-                if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                else Color.White.copy(alpha = 0.12f)
-            )
-            .border(
-                width = 1.dp,
-                color = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(24.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (icon != null) icon()
-            Text(
-                text = text,
-                color = Color.White,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
+/**
+ * The window reports -1 until something overrides it, meaning "use the system level".
+ * Starting a swipe from that value would clamp to zero and black out the screen.
+ */
+private fun startingBrightness(context: android.content.Context, window: android.view.Window?): Float {
+    val override = window?.attributes?.screenBrightness ?: -1f
+    if (override >= 0f) return override
+    val system = try {
+        android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS)
+    } catch (e: Exception) {
+        128
     }
+    return (system / 255f).coerceIn(MIN_BRIGHTNESS, 1f)
 }
 
 private fun getFileNameFromUri(context: android.content.Context, uri: Uri): String? {

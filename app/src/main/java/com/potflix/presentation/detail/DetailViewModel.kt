@@ -211,22 +211,13 @@ class DetailViewModel @Inject constructor(
 
                 _movie.value = updatedMovie
 
-                // Upload community correction to Firestore centrally
-                firebaseSyncManager.suggestTmdbCorrection(
-                    originalTitle = initialMovie.title,
-                    url = initialMovie.url,
-                    correctedTmdbId = tmdbId,
-                    correctedTitle = newTitle,
-                    type = type
-                )
-
                 // If TV, enrich episodes with new TMDB ID
                 if (type == "tv" || updatedMovie.type == "tv") {
                     enrichEpisodes(tmdbId.toInt())
                 }
 
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    android.widget.Toast.makeText(context, "TMDB matched to \"$newTitle\"! Community suggestion submitted.", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, "TMDB matched to \"$newTitle\"!", android.widget.Toast.LENGTH_LONG).show()
                 }
             } else {
                 android.os.Handler(android.os.Looper.getMainLooper()).post {

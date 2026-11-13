@@ -25,17 +25,28 @@ interface DirectoryScraper {
 
 object PotFlixScraper : DirectoryScraper {
 
-    override suspend fun scrapeDirectory(url: String): List<ScrapedEntry> = withContext(Dispatchers.IO) {
+    override suspend fun scrapeDirectory(url: String): List<ScrapedEntry> =
         try {
+            fetchDirectory(url)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+
+    /** Like [scrapeDirectory], but lets callers tell a failed request from an empty folder. */
+    suspend fun fetchDirectory(url: String): List<ScrapedEntry> = withContext(Dispatchers.IO) {
             val safeUrl = url.replace("[", "%5B").replace("]", "%5D")
             val doc = Jsoup.connect(safeUrl)
                 .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                 .header("Connection", "close") // Prevent connection pool exhaustion
                 .timeout(15000)
+                .maxBodySize(0) // Folders can list thousands of titles; the default cap would cut them off.
                 .get()
 
             val entries = mutableListOf<ScrapedEntry>()
             val links = doc.select("a")
+            // Some folders, such as 3D Movies, return a blank page but still answer h5ai's API.
+            if (links.isEmpty()) return@withContext fetchFromH5aiApi(safeUrl)
 
             for (link in links) {
                 val href = link.attr("href")
@@ -76,10 +87,37 @@ object PotFlixScraper : DirectoryScraper {
 
             // Deduplicate by URL
             entries.distinctBy { it.url }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
-        }
+    }
+
+    private fun fetchFromH5aiApi(url: String): List<ScrapedEntry> {
+        val address = URL(url)
+        val path = address.path
+        val body = Jsoup.connect(url)
+            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .data("action", "get")
+            .data("items[href]", path)
+            .data("items[what]", "1")
+            .method(org.jsoup.Connection.Method.POST)
+            .ignoreContentType(true)
+            .maxBodySize(0)
+            .timeout(15000)
+            .execute()
+            .body()
+        return com.google.gson.JsonParser.parseString(body).asJsonObject
+            .getAsJsonArray("items")
+            .map { it.asJsonObject.get("href").asString }
+            .filter { href ->
+                // The reply also includes parent folders; keep only this folder's children.
+                href.startsWith(path) && href != path && '/' !in href.removePrefix(path).trimEnd('/')
+            }
+            .map { href ->
+                val isDirectory = href.endsWith("/")
+                val name = java.net.URLDecoder.decode(
+                    href.trimEnd('/').substringAfterLast('/').replace("+", "%2B"),
+                    "UTF-8"
+                )
+                parseMovieName(name, "${address.protocol}://${address.authority}$href", isDirectory)
+            }
     }
 
     fun parseMovieName(folderName: String, url: String, isDirectory: Boolean): ScrapedEntry {

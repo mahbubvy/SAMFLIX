@@ -1,6 +1,7 @@
 package com.potflix.util
 
-import org.videolan.libvlc.MediaPlayer
+/** An audio or subtitle stream; id -1 means none. */
+data class PlayerTrack(val id: Int, val name: String)
 
 object LanguageUtils {
     data class LanguageOption(
@@ -50,10 +51,10 @@ object LanguageUtils {
     }
 
     fun findMatchingTrack(
-        tracks: List<MediaPlayer.TrackDescription>,
+        tracks: List<PlayerTrack>,
         languageCode: String,
         isSubtitle: Boolean = false
-    ): MediaPlayer.TrackDescription? {
+    ): PlayerTrack? {
         if (tracks.isEmpty()) return null
 
         val options = if (isSubtitle) SUBTITLE_LANGUAGES else AUDIO_LANGUAGES

@@ -34,6 +34,8 @@ import com.potflix.presentation.common.HomeScreenSkeleton
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import com.potflix.presentation.navigation.Screen
+import com.potflix.presentation.navigation.playHero
+import com.potflix.presentation.common.LibraryEmptyState
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -88,7 +90,7 @@ fun MoviesScreen(
                         HeroBanner(
                             movie = heroMovie,
                             onPlayClick = {
-                                navController.navigate(Screen.Detail.createRoute(heroMovie))
+                                navController.playHero(heroMovie, viewModel::onHeroPlaybackStarted)
                             },
                             onInfoClick = {
                                 navController.navigate(Screen.Detail.createRoute(heroMovie))
@@ -141,6 +143,10 @@ fun MoviesScreen(
             }
         }
     }
+
+        if (!isLoading && trendingMovies.isEmpty() && distinctCategories.isEmpty()) {
+            LibraryEmptyState(onReload = viewModel::refresh)
+        }
 
         // Translucent Header Bar (Overlay on top)
         Column(

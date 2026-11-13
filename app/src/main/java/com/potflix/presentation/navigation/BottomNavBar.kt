@@ -65,6 +65,12 @@ sealed class BottomNavItem(
         com.potflix.R.drawable.ic_nav_tvseries,
         "Series"
     )
+    object Browse : BottomNavItem(
+        Screen.Browse.route,
+        com.potflix.R.drawable.ic_nav_browse_hover,
+        com.potflix.R.drawable.ic_nav_browse,
+        "Browse"
+    )
     object Watchlist : BottomNavItem(
         Screen.Watchlist.route,
         com.potflix.R.drawable.ic_nav_watchlist_hover,
@@ -85,6 +91,7 @@ fun BottomNavBar(navController: NavController) {
         BottomNavItem.Home,
         BottomNavItem.Movies,
         BottomNavItem.TvSeries,
+        BottomNavItem.Browse,
         BottomNavItem.Watchlist,
         BottomNavItem.Settings
     )
@@ -126,7 +133,8 @@ fun BottomNavBar(navController: NavController) {
             windowInsets = WindowInsets.navigationBars
         ) {
             items.forEach { item ->
-                val selected = currentRoute == item.route
+                val selected = currentRoute == item.route ||
+                    (item == BottomNavItem.Browse && currentRoute == Screen.BrowseFolder.route)
 
                 val iconScale by animateFloatAsState(
                     targetValue = if (selected) 1.15f else 1.0f,
@@ -180,7 +188,7 @@ fun BottomNavBar(navController: NavController) {
                     },
                     selected = selected,
                     onClick = {
-                        if (!selected) {
+                        if (currentRoute != item.route) {
                             navController.navigate(item.route) {
                                 navController.graph.startDestinationRoute?.let { route ->
                                     popUpTo(route) { 
@@ -214,6 +222,7 @@ fun TvSideNavRail(navController: NavController) {
         BottomNavItem.Home,
         BottomNavItem.Movies,
         BottomNavItem.TvSeries,
+        BottomNavItem.Browse,
         BottomNavItem.Watchlist,
         BottomNavItem.Settings
     )
@@ -299,7 +308,8 @@ fun TvSideNavRail(navController: NavController) {
         Spacer(modifier = Modifier.height(24.dp))
         
         items.forEach { item ->
-            val selected = currentRoute == item.route
+            val selected = currentRoute == item.route ||
+                    (item == BottomNavItem.Browse && currentRoute == Screen.BrowseFolder.route)
             var itemFocused by remember { mutableStateOf(false) }
 
             val itemScale by animateFloatAsState(
@@ -314,7 +324,7 @@ fun TvSideNavRail(navController: NavController) {
             NavigationRailItem(
                 selected = selected,
                 onClick = {
-                    if (!selected) {
+                    if (currentRoute != item.route) {
                         navController.navigate(item.route) {
                             navController.graph.startDestinationRoute?.let { route ->
                                 popUpTo(route) { inclusive = false }
@@ -380,7 +390,7 @@ fun TvSideNavRail(navController: NavController) {
                     .onFocusChanged { itemFocused = it.isFocused }
                     .onKeyEvent { event ->
                         if (event.type == KeyEventType.KeyUp && (event.key == Key.DirectionCenter || event.key == Key.Enter)) {
-                            if (!selected) {
+                            if (currentRoute != item.route) {
                                 navController.navigate(item.route) {
                                     navController.graph.startDestinationRoute?.let { route ->
                                         popUpTo(route) { inclusive = false }

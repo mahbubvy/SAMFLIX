@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
-    id("com.google.gms.google-services")
 }
 
 import java.util.Properties
@@ -25,11 +24,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.potflix"
+        applicationId = "com.potflix.samonline"
         minSdk = 24
         targetSdk = 35
-        versionCode = 300
-        versionName = "3.0.0"
+        versionCode = 302
+        versionName = "3.0.0-samonline"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -68,6 +67,8 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // mpvRex-libmpv was compiled by Kotlin 2.2.
+        freeCompilerArgs += "-Xskip-metadata-version-check"
     }
     buildFeatures {
         compose = true
@@ -108,19 +109,14 @@ dependencies {
     // Coil
     implementation(libs.coil.compose)
 
-    // LibVLC
-    implementation("org.videolan.android:libvlc-all:3.5.1")
+    // libmpv, the engine REX Player uses. It brings in Kotlin's 2.2 library, which it needs at runtime.
+    implementation("com.github.sfsakhawat999:mpvRex-libmpv:0.0.9")
 
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    // Firebase BoM
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
-    implementation("com.google.firebase:firebase-analytics-ktx")
-    implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-firestore-ktx")
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
