@@ -1,5 +1,7 @@
 package com.potflix.presentation.player
 
+import com.potflix.presentation.theme.*
+
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -1089,7 +1091,7 @@ private const val NEXT_EPISODE_COUNTDOWN_SECONDS = 5
 private const val HOLD_SPEED = 2f
 private const val DOUBLE_TAP_SIDE_FRACTION = 0.35f
 private const val DOUBLE_TAP_SEEK_MS = 3_000L
-private val PlayerAccentBlue = Color(0xFF2F8CFF)
+private val PlayerAccentBlue = SamAccent
 private const val MIN_ZOOM = 0.5f
 private const val MAX_ZOOM = 4f
 private const val SCREEN_EDGE_FRACTION = 0.08f

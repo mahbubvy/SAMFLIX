@@ -1,5 +1,7 @@
 package com.potflix.presentation.onboarding
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -51,7 +53,7 @@ fun OnboardingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Welcome to PotFlix", fontWeight = FontWeight.Bold) },
+                title = { Text("Welcome to SAMFLIX", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = Color.White
@@ -200,7 +202,7 @@ fun ServerSelectionItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val backgroundColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0xFF161622)
+    val backgroundColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else SamSurface
     val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
     
     Card(
@@ -245,7 +247,7 @@ fun ServerSelectionItem(
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = "Reachable",
-                        tint = Color(0xFF4CAF50),
+                        tint = SamSuccess,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -253,7 +255,7 @@ fun ServerSelectionItem(
                     Icon(
                         imageVector = Icons.Default.Warning,
                         contentDescription = "Unreachable",
-                        tint = Color(0xFFF44336),
+                        tint = SamError,
                         modifier = Modifier.size(24.dp)
                     )
                 }

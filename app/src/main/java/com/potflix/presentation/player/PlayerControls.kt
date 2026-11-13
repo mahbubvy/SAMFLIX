@@ -1,5 +1,7 @@
 package com.potflix.presentation.player
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -81,8 +83,8 @@ private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f)
 private val SUBTITLE_SIZES = listOf(75 to "Small", 100 to "Normal", 150 to "Large", 200 to "Huge")
 private const val TIMING_STEP_MS = 250L
 
-private val DockColor = Color(0xB31C1B1F)
-private val SheetColor = Color(0xF71A1A20)
+private val DockColor = SamSurface.copy(alpha = 0.7f)
+private val SheetColor = SamSurface.copy(alpha = 0.97f)
 private val DockShape = RoundedCornerShape(16.dp)
 
 enum class PlayerSheet { None, Audio, Subtitles, Speed, Fit, More }

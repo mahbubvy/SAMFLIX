@@ -1,5 +1,7 @@
 package com.potflix.presentation.detail
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -36,7 +38,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.viewinterop.AndroidView
-import com.potflix.presentation.theme.PotFlixRed
+import com.potflix.presentation.theme.SamAccent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -74,12 +76,9 @@ fun DetailScreen(
     val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
     
     val context = androidx.compose.ui.platform.LocalContext.current
-    val isUserLoggedIn = true // No accounts in this build, so nothing is gated behind sign-in.
 
     var showEditTmdbDialog by remember { mutableStateOf(false) }
     var isPlayingTrailer by remember { mutableStateOf(false) }
-    var showGuestDownloadDialog by remember { mutableStateOf(false) }
-    var showGuestTmdbDialog by remember { mutableStateOf(false) }
 
     var showMobileDataPrompt by remember { mutableStateOf(false) }
     var pendingStreamUrl by remember { mutableStateOf<String?>(null) }
@@ -193,11 +192,11 @@ fun DetailScreen(
                         movie?.rating?.let { rating ->
                             if (rating > 0) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Star, contentDescription = "Rating", tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Star, contentDescription = "Rating", tint = SamRating, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = String.format("%.1f", rating),
-                                        color = Color(0xFFFFC107),
+                                        color = SamRating,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
                                     )
@@ -362,22 +361,18 @@ fun DetailScreen(
                     } else null
 
                     val onDownloadClick: () -> Unit = {
-                        if (!isUserLoggedIn) {
-                            showGuestDownloadDialog = true
-                        } else {
-                            if (movieDownload == null || movieDownload.status == com.potflix.service.DownloadService.STATUS_FAILED) {
-                                movie?.let {
-                                    viewModel.startDownload(it.title, it.url, it.poster)
-                                }
-                            } else if (movieDownload.status == com.potflix.service.DownloadService.STATUS_SUCCESSFUL) {
-                                val streamUrl = movieDownload.localUri
-                                if (streamUrl != null) {
-                                    val movieUrl = movie?.url ?: streamUrl
-                                    navController.navigate(Screen.Player.createRoute(movieUrl, streamUrl, movieDownload.title))
-                                }
-                            } else {
-                                navController.navigate(Screen.Watchlist.route)
+                        if (movieDownload == null || movieDownload.status == com.potflix.service.DownloadService.STATUS_FAILED) {
+                            movie?.let {
+                                viewModel.startDownload(it.title, it.url, it.poster)
                             }
+                        } else if (movieDownload.status == com.potflix.service.DownloadService.STATUS_SUCCESSFUL) {
+                            val streamUrl = movieDownload.localUri
+                            if (streamUrl != null) {
+                                val movieUrl = movie?.url ?: streamUrl
+                                navController.navigate(Screen.Player.createRoute(movieUrl, streamUrl, movieDownload.title))
+                            }
+                        } else {
+                            navController.navigate(Screen.Library.route)
                         }
                     }
 
@@ -409,7 +404,7 @@ fun DetailScreen(
 
                         val dlIcon: @Composable () -> Unit = {
                             when {
-                                isDownloaded -> Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
+                                isDownloaded -> Icon(Icons.Default.PlayArrow, contentDescription = null, tint = SamSuccess, modifier = Modifier.size(18.dp))
                                 isDownloading -> CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                 else -> Icon(painter = androidx.compose.ui.res.painterResource(id = com.potflix.R.drawable.ic_nav_downloads), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                             }
@@ -426,7 +421,7 @@ fun DetailScreen(
                             label = dlText,
                             onClick = onDownloadClick,
                             isActive = isDownloaded,
-                            activeColor = Color(0xFF4CAF50),
+                            activeColor = SamSuccess,
                             modifier = btnModifier
                         )
                     }
@@ -437,7 +432,7 @@ fun DetailScreen(
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
                                     contentDescription = "Watch Trailer",
-                                    tint = PotFlixRed,
+                                    tint = SamAccent,
                                     modifier = Modifier.size(18.dp)
                                 )
                             },
@@ -453,14 +448,14 @@ fun DetailScreen(
                                 Icon(
                                     imageVector = if (inWatchlist) Icons.Default.Check else Icons.Default.Add,
                                     contentDescription = null,
-                                    tint = if (inWatchlist) PotFlixRed else Color.White,
+                                    tint = if (inWatchlist) SamAccent else Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
                             },
                             label = if (inWatchlist) "In Watchlist" else "My List",
                             onClick = { viewModel.toggleWatchlist() },
                             isActive = inWatchlist,
-                            activeColor = PotFlixRed,
+                            activeColor = SamAccent,
                             modifier = btnModifier
                         )
                     }
@@ -477,11 +472,7 @@ fun DetailScreen(
                             },
                             label = "Fix TMDB",
                             onClick = {
-                                if (!isUserLoggedIn) {
-                                    showGuestTmdbDialog = true
-                                } else {
-                                    showEditTmdbDialog = true
-                                }
+                                showEditTmdbDialog = true
                             },
                             modifier = btnModifier
                         )
@@ -580,7 +571,7 @@ fun DetailScreen(
                                 Box(
                                     modifier = Modifier
                                         .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
-                                        .background(Color(0xFF222222))
+                                        .background(SamSurface)
                                         .clickable {
                                             navController.navigate(com.potflix.presentation.navigation.Screen.Search.createRoute(actor))
                                         }
@@ -613,9 +604,9 @@ fun DetailScreen(
                             // On Mobile Data or disconnected from Wi-Fi
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF261D10)),
+                                colors = CardDefaults.cardColors(containerColor = SamSurfaceRaised),
                                 shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.5f))
+                                border = androidx.compose.foundation.BorderStroke(1.dp, SamWarning.copy(alpha = 0.5f))
                             ) {
                                 Column(
                                     modifier = Modifier.padding(18.dp),
@@ -624,7 +615,7 @@ fun DetailScreen(
                                     Icon(
                                         imageVector = Icons.Default.WifiOff,
                                         contentDescription = null,
-                                        tint = Color(0xFFFFB74D),
+                                        tint = SamWarning,
                                         modifier = Modifier.size(36.dp)
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
@@ -650,7 +641,7 @@ fun DetailScreen(
                                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Button(
                                             onClick = { com.potflix.util.NetworkUtils.openWifiSettings(context) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                                            colors = ButtonDefaults.buttonColors(containerColor = SamWarning),
                                             shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                                         ) {
                                             Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Black)
@@ -675,13 +666,13 @@ fun DetailScreen(
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Card(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E261E)),
+                                    colors = CardDefaults.cardColors(containerColor = SamSurfaceRaised),
                                     shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.5f))
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, SamSuccess.copy(alpha = 0.5f))
                                 ) {
                                     Column(modifier = Modifier.padding(14.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = SamSuccess, modifier = Modifier.size(20.dp))
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = "Available Offline (${downloadedEpisodesForSeries.size})",
@@ -711,7 +702,7 @@ fun DetailScreen(
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Button(
                                                     onClick = { actuallyPlayVideo(localPath, epDl.title) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = SamSuccess),
                                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                                     shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
                                                 ) {
@@ -754,11 +745,7 @@ fun DetailScreen(
                                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Button(
                                             onClick = {
-                                                if (!isUserLoggedIn) {
-                                                    showGuestTmdbDialog = true
-                                                } else {
-                                                    showEditTmdbDialog = true
-                                                }
+                                                showEditTmdbDialog = true
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                             shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
@@ -902,25 +889,21 @@ fun DetailScreen(
                                 val epDownload = downloads.find { it.streamUrl == episode.url }
                                 IconButton(
                                     onClick = {
-                                        if (!isUserLoggedIn) {
-                                            showGuestDownloadDialog = true
+                                        if (epDownload == null || epDownload.status == com.potflix.service.DownloadService.STATUS_FAILED) {
+                                            val fullTitle = "${movie?.title ?: "TV Show"} - S${selectedSeason?.number ?: 1}E${episode.number ?: 1} - ${episode.title}"
+                                            viewModel.startDownload(
+                                                title = fullTitle,
+                                                streamUrl = episode.url,
+                                                poster = episode.stillPath ?: movie?.poster
+                                            )
                                         } else {
-                                            if (epDownload == null || epDownload.status == com.potflix.service.DownloadService.STATUS_FAILED) {
-                                                val fullTitle = "${movie?.title ?: "TV Show"} - S${selectedSeason?.number ?: 1}E${episode.number ?: 1} - ${episode.title}"
-                                                viewModel.startDownload(
-                                                    title = fullTitle,
-                                                    streamUrl = episode.url,
-                                                    poster = episode.stillPath ?: movie?.poster
-                                                )
-                                            } else {
-                                                navController.navigate(Screen.Watchlist.route)
-                                            }
+                                            navController.navigate(Screen.Library.route)
                                         }
                                     }
                                 ) {
                                     if (epDownload != null) {
                                         if (epDownload.status == com.potflix.service.DownloadService.STATUS_SUCCESSFUL) {
-                                            Icon(androidx.compose.material.icons.Icons.Default.Check, contentDescription = "Downloaded", tint = Color(0xFF4CAF50))
+                                            Icon(androidx.compose.material.icons.Icons.Default.Check, contentDescription = "Downloaded", tint = SamSuccess)
                                         } else if (epDownload.status == com.potflix.service.DownloadService.STATUS_FAILED) {
                                             Icon(painter = androidx.compose.ui.res.painterResource(id = com.potflix.R.drawable.ic_nav_downloads), contentDescription = "Retry", tint = MaterialTheme.colorScheme.error)
                                         } else {
@@ -948,7 +931,7 @@ fun DetailScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = padding.calculateTopPadding()),
-                containerColor = Color(0xFF1E1E1E),
+                containerColor = SamSurface,
                 contentColor = MaterialTheme.colorScheme.primary
             )
         }
@@ -972,80 +955,10 @@ fun DetailScreen(
         )
     }
 
-    if (showGuestDownloadDialog) {
-        AlertDialog(
-            onDismissRequest = { showGuestDownloadDialog = false },
-            icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Sign In Required", fontWeight = FontWeight.Bold, color = Color.White) },
-            text = {
-                Text(
-                    "Offline downloading is available exclusively for registered accounts. Please sign in or create a free account to download content for offline viewing.",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showGuestDownloadDialog = false
-                        navController.navigate(Screen.Login.route)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                ) {
-                    Text("Sign In / Register")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showGuestDownloadDialog = false }) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.7f))
-                }
-            },
-            containerColor = Color(0xFF222222),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-        )
-    }
-
-    if (showGuestTmdbDialog) {
-        AlertDialog(
-            onDismissRequest = { showGuestTmdbDialog = false },
-            icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Sign In Required", fontWeight = FontWeight.Bold, color = Color.White) },
-            text = {
-                Text(
-                    "TMDB metadata corrections and community suggestions require an account. Please sign in to contribute.",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showGuestTmdbDialog = false
-                        navController.navigate(Screen.Login.route)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                ) {
-                    Text("Sign In")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showGuestTmdbDialog = false }) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.7f))
-                }
-            },
-            containerColor = Color(0xFF222222),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-        )
-    }
-
     if (showMobileDataPrompt) {
         AlertDialog(
             onDismissRequest = { showMobileDataPrompt = false },
-            icon = { Icon(Icons.Default.Wifi, contentDescription = null, tint = Color(0xFFFF9800)) },
+            icon = { Icon(Icons.Default.Wifi, contentDescription = null, tint = SamWarning) },
             title = { Text("Connect to SamOnline to stream", fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Text(
@@ -1061,7 +974,7 @@ fun DetailScreen(
                         showMobileDataPrompt = false
                         com.potflix.util.NetworkUtils.openWifiSettings(context)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                    colors = ButtonDefaults.buttonColors(containerColor = SamWarning),
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                 ) {
                     Text("Open Wi-Fi Settings", color = Color.Black, fontWeight = FontWeight.Bold)
@@ -1085,7 +998,7 @@ fun DetailScreen(
                     }
                 }
             },
-            containerColor = Color(0xFF242424),
+            containerColor = SamSurfaceRaised,
             shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
         )
     }
@@ -1135,7 +1048,7 @@ fun TmdbCorrectionDialog(
             .padding(horizontal = 16.dp, vertical = 24.dp)
             .heightIn(max = 620.dp),
         shape = RoundedCornerShape(24.dp),
-        containerColor = Color(0xFF14141E),
+        containerColor = SamSurface,
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1147,13 +1060,13 @@ fun TmdbCorrectionDialog(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(PotFlixRed.copy(alpha = 0.15f)),
+                            .background(SamAccent.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = null,
-                            tint = PotFlixRed,
+                            tint = SamAccent,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1177,7 +1090,7 @@ fun TmdbCorrectionDialog(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF222230))
+                        .background(SamSurface)
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -1201,7 +1114,7 @@ fun TmdbCorrectionDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1C1C28))
+                        .background(SamSurface)
                         .padding(4.dp)
                 ) {
                     // TV Series Option
@@ -1209,7 +1122,7 @@ fun TmdbCorrectionDialog(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(9.dp))
-                            .background(if (selectedType == "tv") PotFlixRed else Color.Transparent)
+                            .background(if (selectedType == "tv") SamAccent else Color.Transparent)
                             .clickable { selectedType = "tv" }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
@@ -1227,7 +1140,7 @@ fun TmdbCorrectionDialog(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(9.dp))
-                            .background(if (selectedType == "movie") PotFlixRed else Color.Transparent)
+                            .background(if (selectedType == "movie") SamAccent else Color.Transparent)
                             .clickable { selectedType = "movie" }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
@@ -1252,10 +1165,10 @@ fun TmdbCorrectionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PotFlixRed,
-                        unfocusedBorderColor = Color(0xFF2B2B3C),
-                        focusedContainerColor = Color(0xFF1B1B26),
-                        unfocusedContainerColor = Color(0xFF1B1B26),
+                        focusedBorderColor = SamAccent,
+                        unfocusedBorderColor = SamSurfaceRaised,
+                        focusedContainerColor = SamSurface,
+                        unfocusedContainerColor = SamSurface,
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
                     ),
@@ -1263,7 +1176,7 @@ fun TmdbCorrectionDialog(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = PotFlixRed,
+                            tint = SamAccent,
                             modifier = Modifier.size(20.dp)
                         )
                     },
@@ -1303,10 +1216,10 @@ fun TmdbCorrectionDialog(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PotFlixRed,
-                            unfocusedBorderColor = Color(0xFF2B2B3C),
-                            focusedContainerColor = Color(0xFF1B1B26),
-                            unfocusedContainerColor = Color(0xFF1B1B26),
+                            focusedBorderColor = SamAccent,
+                            unfocusedBorderColor = SamSurfaceRaised,
+                            focusedContainerColor = SamSurface,
+                            unfocusedContainerColor = SamSurface,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White
                         ),
@@ -1323,7 +1236,7 @@ fun TmdbCorrectionDialog(
                         },
                         enabled = directTmdbId.isNotBlank(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed),
+                        colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
                     ) {
                         Text("Apply", fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -1343,7 +1256,7 @@ fun TmdbCorrectionDialog(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(32.dp),
-                                color = PotFlixRed,
+                                color = SamAccent,
                                 strokeWidth = 2.5.dp
                             )
                             Spacer(modifier = Modifier.height(10.dp))
@@ -1404,8 +1317,8 @@ fun TmdbCorrectionDialog(
                                     .fillMaxWidth()
                                     .clickable { onSelectTmdb(item.id.toLong(), selectedType) },
                                 shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B26)),
-                                border = BorderStroke(1.dp, Color(0xFF282838))
+                                colors = CardDefaults.cardColors(containerColor = SamSurface),
+                                border = BorderStroke(1.dp, SamSurfaceRaised)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(10.dp),
@@ -1418,7 +1331,7 @@ fun TmdbCorrectionDialog(
                                         modifier = Modifier
                                             .size(width = 46.dp, height = 66.dp)
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(Color(0xFF222230)),
+                                            .background(SamSurface),
                                         contentScale = ContentScale.Crop
                                     )
 
@@ -1444,7 +1357,7 @@ fun TmdbCorrectionDialog(
                                                 Box(
                                                     modifier = Modifier
                                                         .clip(RoundedCornerShape(4.dp))
-                                                        .background(Color(0xFF282838))
+                                                        .background(SamSurfaceRaised)
                                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                                 ) {
                                                     Text(
@@ -1459,14 +1372,14 @@ fun TmdbCorrectionDialog(
                                             Box(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(4.dp))
-                                                    .background(PotFlixRed.copy(alpha = 0.15f))
+                                                    .background(SamAccent.copy(alpha = 0.15f))
                                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
                                                     text = "ID: ${item.id}",
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = PotFlixRed
+                                                    color = SamAccent
                                                 )
                                             }
                                         }
@@ -1490,7 +1403,7 @@ fun TmdbCorrectionDialog(
                                     Button(
                                         onClick = { onSelectTmdb(item.id.toLong(), selectedType) },
                                         shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed),
+                                        colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                         modifier = Modifier.height(34.dp)
                                     ) {
@@ -1548,7 +1461,7 @@ fun DetailCoverHeader(
                     .heightIn(max = 440.dp)
                     .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
-                    .background(Color(0xFF0D0D11)),
+                    .background(SamBackground),
                 contentAlignment = Alignment.Center
             ) {
                 if (hasBackdrop) {
@@ -1621,7 +1534,7 @@ fun DetailCoverHeader(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0xFF141419)),
+                            .background(SamBackground),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -1797,7 +1710,7 @@ fun TrailerPlayer(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF141414))
+                    .background(SamBackground)
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -1805,7 +1718,7 @@ fun TrailerPlayer(
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
-                    tint = PotFlixRed,
+                    tint = SamAccent,
                     modifier = Modifier.size(48.dp)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1825,7 +1738,7 @@ fun TrailerPlayer(
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = openYouTube,
-                    colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed),
+                    colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Icon(
@@ -1864,7 +1777,7 @@ fun TrailerPlayer(
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Open in YouTube",
-                        tint = PotFlixRed,
+                        tint = SamAccent,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
@@ -1904,7 +1817,7 @@ fun TrailerBadgeButton(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(24.dp),
-        color = if (isFocused) PotFlixRed else Color.Black.copy(alpha = 0.7f),
+        color = if (isFocused) SamAccent else Color.Black.copy(alpha = 0.7f),
         border = BorderStroke(
             1.dp,
             if (isFocused) Color.White else Color.White.copy(alpha = 0.35f)
@@ -1946,7 +1859,7 @@ fun DetailActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     isActive: Boolean = false,
-    activeColor: Color = PotFlixRed,
+    activeColor: Color = SamAccent,
     contentColor: Color = Color.White
 ) {
     var isFocused by remember { mutableStateOf(false) }

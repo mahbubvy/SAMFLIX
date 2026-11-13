@@ -1,5 +1,7 @@
 package com.potflix.presentation.home.components
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -73,9 +75,9 @@ fun HeroBanner(
                         colors = listOf(
                             Color.Transparent,
                             Color.Transparent,
-                            Color(0xFF0A0A0A).copy(alpha = 0.6f),
-                            Color(0xFF0A0A0A).copy(alpha = 0.95f),
-                            Color(0xFF0A0A0A)
+                            SamBackground.copy(alpha = 0.6f),
+                            SamBackground.copy(alpha = 0.95f),
+                            SamBackground
                         ),
                         startY = 150f
                     )
@@ -95,7 +97,7 @@ fun HeroBanner(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFFE50914).copy(alpha = 0.9f))
+                    .background(SamAccent.copy(alpha = 0.9f))
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text(
@@ -150,7 +152,7 @@ fun HeroBanner(
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = "Rating",
-                            tint = Color(0xFFFFC107),
+                            tint = SamRating,
                             modifier = Modifier.size(14.dp)
                         )
                         Text(

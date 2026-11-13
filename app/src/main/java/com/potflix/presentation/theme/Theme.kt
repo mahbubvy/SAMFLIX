@@ -1,48 +1,44 @@
 package com.potflix.presentation.theme
 
 import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
-    primary = PotFlixRed,
-    secondary = PotFlixPurple,
-    tertiary = PotFlixBlue,
-    background = PotFlixDark,
-    surface = PotFlixSurface,
-    onPrimary = PotFlixTextBright,
-    onSecondary = PotFlixTextBright,
-    onTertiary = PotFlixTextBright,
-    onBackground = PotFlixTextPrimary,
-    onSurface = PotFlixTextPrimary,
+// SAMFLIX is dark only. Every role is set so Material components need no per-screen colours.
+private val SamColorScheme = darkColorScheme(
+    primary = SamAccent,
+    onPrimary = SamOnAccent,
+    primaryContainer = SamAccentPressed,
+    onPrimaryContainer = SamOnAccent,
+    secondary = SamAccent,
+    onSecondary = SamOnAccent,
+    secondaryContainer = SamSurfaceRaised,
+    onSecondaryContainer = SamText,
+    tertiary = SamAccent,
+    onTertiary = SamOnAccent,
+    background = SamBackground,
+    onBackground = SamText,
+    surface = SamSurface,
+    onSurface = SamText,
+    surfaceVariant = SamSurfaceRaised,
+    onSurfaceVariant = SamTextMuted,
+    surfaceContainerLowest = SamBackground,
+    surfaceContainerLow = SamSurface,
+    surfaceContainer = SamSurface,
+    surfaceContainerHigh = SamSurfaceRaised,
+    surfaceContainerHighest = SamSurfaceRaised,
+    outline = SamOutline,
+    outlineVariant = SamOutline,
+    error = SamError,
+    onError = SamOnAccent
 )
 
 @Composable
-fun PotFlixTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = false, // Keep it false to maintain branding
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> DarkColorScheme // PotFlix is always dark
-    }
+fun PotFlixTheme(content: @Composable () -> Unit) {
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -50,12 +46,12 @@ fun PotFlixTheme(
             WindowCompat.setDecorFitsSystemWindows(window, false)
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
         }
     }
 
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = SamColorScheme,
         typography = Typography,
         content = content
     )

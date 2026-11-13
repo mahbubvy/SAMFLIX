@@ -1,5 +1,7 @@
 package com.potflix.presentation.home.components
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -88,7 +90,7 @@ private fun Top10Item(
             style = MaterialTheme.typography.displayLarge.copy(
                 fontSize = 110.sp,
                 fontWeight = FontWeight.Black,
-                color = Color(0xFFE50914)
+                color = SamAccent
             )
         )
 
@@ -99,7 +101,7 @@ private fun Top10Item(
                 .height(180.dp)
                 .align(Alignment.CenterEnd),
             shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E24)),
+            colors = CardDefaults.cardColors(containerColor = SamSurface),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             AsyncImage(

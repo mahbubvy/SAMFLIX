@@ -10,10 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.potflix.presentation.detail.DetailScreen
-import com.potflix.presentation.home.HomeScreen
 import com.potflix.presentation.player.PlayerActivity
-import com.potflix.presentation.movies.MoviesScreen
-import com.potflix.presentation.tv.TvSeriesScreen
 import com.potflix.presentation.search.SearchScreen
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Alignment
@@ -37,15 +34,7 @@ fun PotFlixNavGraph(
         }
         
         composable(route = Screen.Home.route) {
-            HomeScreen(navController = navController)
-        }
-        
-        composable(route = Screen.Movies.route) {
-            MoviesScreen(navController = navController)
-        }
-        
-        composable(route = Screen.TvSeries.route) {
-            TvSeriesScreen(navController = navController)
+            com.potflix.presentation.home.HomeTabScreen(navController = navController)
         }
         
         composable(route = Screen.Browse.route) {
@@ -89,16 +78,8 @@ fun PotFlixNavGraph(
             SearchScreen(navController = navController)
         }
         
-        composable(route = Screen.Downloads.route) {
-            com.potflix.presentation.downloads.DownloadsScreen(navController = navController)
-        }
-        
-        composable(route = Screen.Watchlist.route) {
-            com.potflix.presentation.watchlist.WatchlistScreen(navController = navController)
-        }
-        
-        composable(route = Screen.Login.route) {
-            com.potflix.presentation.login.LoginScreen(navController = navController)
+        composable(route = Screen.Library.route) {
+            com.potflix.presentation.library.LibraryScreen(navController = navController)
         }
         
         composable(

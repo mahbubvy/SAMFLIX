@@ -196,3 +196,22 @@ Phases 1 and 2 touch nearly every file, so do them before any other feature work
 
 The player already has a 5-second "Next episode" countdown with Cancel, so that item in §5
 Player is done.
+
+## 10. Progress (13 Nov 2026)
+
+**Done, built, not yet tried on a device:**
+- Colour roles in `theme/Color.kt`, full type scale in `Type.kt`, spacing, shapes and the
+  tablet breakpoint in `Dimens.kt`. No `Color(0x…)` is left outside `theme/`.
+- Shared pieces in `common/SamComponents.kt`: wordmark, chip row, top bar, Settings gear.
+- Four tabs (Home, Browse, Search, Library); bottom bar on phones, rail at 600 dp and wider.
+  Home has All / Movies / Series chips; Library has History / Watchlist / Downloads.
+  Settings opens from the gear and has a back arrow.
+- Login screen and the "Sign in required" dialogs removed.
+- Renamed to SAMFLIX, with a new "S" launcher icon (adaptive, plus PNGs for Android 7).
+
+**Left from phases 1–2:**
+- 102 hard-coded `.sp` text sizes remain, mostly in `DetailScreen.kt` (38), `SettingsScreen.kt`,
+  `HeroBanner.kt` and `SearchScreen.kt`. Move them onto the type scale screen by screen.
+- User-facing text is not yet in `strings.xml`.
+- The update check in Settings still points at the original PotFlix GitHub releases, and the
+  Telegram link is the original author's channel. Both should be replaced or removed.

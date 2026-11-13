@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The SAMFLIX mark: a bold rounded "S", drawn on a 108dp adaptive-icon grid. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M67,37 C63,32.5 58,30.5 52,30.5 C43.5,30.5 38,35.5 38,42 C38,49 44,52 54,54.5 C64.5,57 70.5,60 70.5,67 C70.5,74 64.5,78.5 55.5,78.5 C48.5,78.5 43,75.5 39.5,70.5"
+        android:strokeColor="#2F8CFF"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

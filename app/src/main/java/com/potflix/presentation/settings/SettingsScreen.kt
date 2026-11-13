@@ -1,5 +1,7 @@
 package com.potflix.presentation.settings
 
+import com.potflix.presentation.theme.*
+
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -36,7 +38,7 @@ import com.potflix.BuildConfig
 import com.potflix.R
 import com.potflix.data.local.preferences.ServerConfig
 import com.potflix.presentation.navigation.Screen
-import com.potflix.presentation.theme.PotFlixRed
+import com.potflix.presentation.theme.SamAccent
 import com.potflix.util.LanguageUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,22 +70,12 @@ fun SettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        "Settings", 
-                        fontWeight = FontWeight.Black,
-                        fontSize = 24.sp,
-                        letterSpacing = (-0.5).sp
-                    ) 
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0A0A0A),
-                    titleContentColor = Color.White
-                )
+            com.potflix.presentation.common.SamTopBar(
+                title = "Settings",
+                onBack = { navController.popBackStack() }
             )
         },
-        containerColor = Color(0xFF0A0A0A)
+        containerColor = SamBackground
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
@@ -97,8 +89,8 @@ fun SettingsScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF13131A)),
-                    border = BorderStroke(1.dp, Color(0xFF22222E))
+                    colors = CardDefaults.cardColors(containerColor = SamBackground),
+                    border = BorderStroke(1.dp, SamSurface)
                 ) {
                     Box(
                         modifier = Modifier
@@ -106,7 +98,7 @@ fun SettingsScreen(
                             .background(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xFFE50914).copy(alpha = 0.12f),
+                                        SamAccent.copy(alpha = 0.12f),
                                         Color.Transparent
                                     )
                                 )
@@ -118,35 +110,13 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(Color.Black.copy(alpha = 0.5f))
-                                        .padding(6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.ic_potflix_logo_vector),
-                                        contentDescription = "PotFlix Logo",
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Column {
-                                    Text(
-                                        text = "PotFlix",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Black,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = "v${BuildConfig.VERSION_NAME} • Streaming Engine",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.55f)
-                                    )
-                                }
+                            Column {
+                                com.potflix.presentation.common.SamflixWordmark()
+                                Text(
+                                    text = "Version ${BuildConfig.VERSION_NAME}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SamTextMuted
+                                )
                             }
 
                             // Status Pill
@@ -154,21 +124,21 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(Color(0xFF10B981).copy(alpha = 0.15f))
+                                    .background(SamSuccess.copy(alpha = 0.15f))
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(6.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF10B981))
+                                        .background(SamSuccess)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Ready",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF10B981)
+                                    color = SamSuccess
                                 )
                             }
                         }
@@ -184,7 +154,7 @@ fun SettingsScreen(
                 SettingsCardGroup(title = "Streaming & Playback") {
                     ModernSettingsItem(
                         icon = Icons.Default.Dns,
-                        iconTint = Color(0xFFA855F7), // Purple
+                        iconTint = SamAccent, // Purple
                         title = "Content Server",
                         subtitle = activeServer.name,
                         trailingValue = activeServer.name,
@@ -194,7 +164,7 @@ fun SettingsScreen(
 
                     ModernSettingsItem(
                         icon = Icons.Default.Audiotrack,
-                        iconTint = Color(0xFF3B82F6), // Blue
+                        iconTint = SamAccent, // Blue
                         title = "Preferred Audio",
                         subtitle = LanguageUtils.getAudioLanguageDisplayName(currentAudioLang),
                         trailingValue = LanguageUtils.getAudioLanguageDisplayName(currentAudioLang),
@@ -204,7 +174,7 @@ fun SettingsScreen(
 
                     ModernSettingsItem(
                         icon = Icons.Default.Subtitles,
-                        iconTint = Color(0xFF06B6D4), // Cyan
+                        iconTint = SamAccent, // Cyan
                         title = "Preferred Subtitles",
                         subtitle = LanguageUtils.getSubtitleLanguageDisplayName(currentSubtitleLang),
                         trailingValue = LanguageUtils.getSubtitleLanguageDisplayName(currentSubtitleLang),
@@ -223,7 +193,7 @@ fun SettingsScreen(
                 SettingsCardGroup(title = "Storage & Database") {
                     ModernSettingsItem(
                         icon = Icons.Default.CleaningServices,
-                        iconTint = Color(0xFFF97316), // Orange
+                        iconTint = SamWarning, // Orange
                         title = "Clear Cache",
                         subtitle = "Temporary streaming & poster cache ($cacheSize)",
                         trailingValue = cacheSize,
@@ -234,7 +204,7 @@ fun SettingsScreen(
 
                     ModernSettingsItem(
                         icon = Icons.Default.Sync,
-                        iconTint = Color(0xFF10B981), // Emerald
+                        iconTint = SamSuccess, // Emerald
                         title = if (isSyncing) "Syncing Database..." else "Sync Database",
                         subtitle = if (isSyncing) syncProgress else "Last: $lastSyncTime",
                         isLoading = isSyncing,
@@ -253,7 +223,7 @@ fun SettingsScreen(
                 SettingsCardGroup(title = "Preferences & Metadata") {
                     ModernSettingsSwitchItem(
                         icon = Icons.Default.NotificationsActive,
-                        iconTint = Color(0xFFEC4899), // Pink
+                        iconTint = SamAccent, // Pink
                         title = "Daily Recommendations",
                         subtitle = "Receive daily movie & series suggestions",
                         checked = dailyNotifEnabled,
@@ -263,7 +233,7 @@ fun SettingsScreen(
 
                     ModernSettingsItem(
                         icon = Icons.Default.Key,
-                        iconTint = Color(0xFFF59E0B), // Amber
+                        iconTint = SamWarning, // Amber
                         title = "TMDB API Key",
                         subtitle = "Personal key avoids shared rate limits",
                         trailingValue = tmdbStatus,
@@ -279,11 +249,11 @@ fun SettingsScreen(
                     // Telegram Community Item
                     ModernSettingsItem(
                         icon = Icons.AutoMirrored.Filled.Send,
-                        iconTint = Color(0xFF29B6F6), // Telegram Blue
+                        iconTint = SamAccent, // Telegram Blue
                         title = "Telegram Community",
                         subtitle = "Requests, feedback & announcements • @PotFlixx",
                         trailingBadge = "Join ↗",
-                        badgeColor = Color(0xFF29B6F6),
+                        badgeColor = SamAccent,
                         onClick = {
                             uriHandler.openUri("https://t.me/PotFlixx")
                         },
@@ -293,7 +263,7 @@ fun SettingsScreen(
                     // Developer Info
                     ModernSettingsItem(
                         icon = Icons.Default.Code,
-                        iconTint = Color(0xFF8B5CF6), // Violet
+                        iconTint = SamAccent, // Violet
                         title = "Developer Portfolio",
                         subtitle = "reduan.vercel.app ↗",
                         onClick = {
@@ -307,7 +277,7 @@ fun SettingsScreen(
                         icon = Icons.Default.Info,
                         iconTint = Color.White.copy(alpha = 0.5f),
                         title = "Version",
-                        subtitle = "PotFlix build ${BuildConfig.VERSION_NAME}",
+                        subtitle = "SAMFLIX build ${BuildConfig.VERSION_NAME}",
                         trailingValue = "v${BuildConfig.VERSION_NAME}",
                         onClick = {},
                         showDivider = false
@@ -323,7 +293,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showServerDialog = false },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFF161622),
+            containerColor = SamSurface,
             title = {
                 Text("Select Content Server", fontWeight = FontWeight.Bold, color = Color.White)
             },
@@ -335,7 +305,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) PotFlixRed.copy(alpha = 0.12f) else Color.Transparent)
+                                .background(if (isSelected) SamAccent.copy(alpha = 0.12f) else Color.Transparent)
                                 .clickable {
                                     viewModel.setActiveServer(server)
                                     showServerDialog = false
@@ -350,7 +320,7 @@ fun SettingsScreen(
                                     showServerDialog = false
                                 },
                                 colors = RadioButtonDefaults.colors(
-                                    selectedColor = PotFlixRed,
+                                    selectedColor = SamAccent,
                                     unselectedColor = Color.White.copy(alpha = 0.4f)
                                 )
                             )
@@ -376,7 +346,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showAudioLangDialog = false },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFF161622),
+            containerColor = SamSurface,
             title = { Text("Preferred Audio Language", fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -386,7 +356,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) PotFlixRed.copy(alpha = 0.12f) else Color.Transparent)
+                                .background(if (isSelected) SamAccent.copy(alpha = 0.12f) else Color.Transparent)
                                 .clickable {
                                     viewModel.setPreferredAudioLanguage(lang.code)
                                     showAudioLangDialog = false
@@ -401,7 +371,7 @@ fun SettingsScreen(
                                     showAudioLangDialog = false
                                 },
                                 colors = RadioButtonDefaults.colors(
-                                    selectedColor = PotFlixRed,
+                                    selectedColor = SamAccent,
                                     unselectedColor = Color.White.copy(alpha = 0.4f)
                                 )
                             )
@@ -424,7 +394,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showSubtitleLangDialog = false },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFF161622),
+            containerColor = SamSurface,
             title = { Text("Preferred Subtitle Language", fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -434,7 +404,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) PotFlixRed.copy(alpha = 0.12f) else Color.Transparent)
+                                .background(if (isSelected) SamAccent.copy(alpha = 0.12f) else Color.Transparent)
                                 .clickable {
                                     viewModel.setPreferredSubtitleLanguage(lang.code)
                                     showSubtitleLangDialog = false
@@ -449,7 +419,7 @@ fun SettingsScreen(
                                     showSubtitleLangDialog = false
                                 },
                                 colors = RadioButtonDefaults.colors(
-                                    selectedColor = PotFlixRed,
+                                    selectedColor = SamAccent,
                                     unselectedColor = Color.White.copy(alpha = 0.4f)
                                 )
                             )
@@ -472,7 +442,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { viewModel.dismissRestartDialog() },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFF161622),
+            containerColor = SamSurface,
             title = { Text("Restart Required", fontWeight = FontWeight.Bold, color = Color.White) },
             text = { Text("You have switched the content server to ${activeServer.name}. Please restart the app for changes to take full effect.", color = Color.White.copy(alpha = 0.8f)) },
             confirmButton = {
@@ -487,7 +457,7 @@ fun SettingsScreen(
                         activity?.finish()
                         Runtime.getRuntime().exit(0)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed),
+                    colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("Restart Now", color = Color.White, fontWeight = FontWeight.Bold)
@@ -505,7 +475,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFF161622),
+            containerColor = SamSurface,
             title = { Text("Clear App Cache", fontWeight = FontWeight.Bold, color = Color.White) },
             text = { Text("Are you sure you want to clear temporary cached images and streams? ($cacheSize will be freed).", color = Color.White.copy(alpha = 0.8f)) },
             confirmButton = {
@@ -514,7 +484,7 @@ fun SettingsScreen(
                         showClearCacheDialog = false
                         viewModel.clearCache()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed),
+                    colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("Clear", color = Color.White, fontWeight = FontWeight.Bold)
@@ -533,11 +503,11 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog() },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFF161622),
+            containerColor = SamSurface,
             title = { Text("Update Available: v${update.versionName}", fontWeight = FontWeight.Bold, color = Color.White) },
             text = { 
                 Column {
-                    Text("A new version of PotFlix is ready for download!", color = Color.White)
+                    Text("A new version of SAMFLIX is ready to download.", color = Color.White)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(update.releaseNotes, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f))
                 }
@@ -555,7 +525,7 @@ fun SettingsScreen(
                         }
                         viewModel.dismissUpdateDialog()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed),
+                    colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("Download Update", color = Color.White, fontWeight = FontWeight.Bold)
@@ -576,12 +546,12 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showTmdbDialog = false },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFF161622),
+            containerColor = SamSurface,
             title = { Text("TMDB API Key", fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "PotFlix uses The Movie Database (TMDB) for posters, ratings, and synopsis. Enter your personal TMDB API key to avoid shared rate limits.",
+                        "SAMFLIX uses The Movie Database (TMDB) for posters, ratings, and synopsis. Enter your personal TMDB API key to avoid shared rate limits.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
                     )
@@ -589,7 +559,7 @@ fun SettingsScreen(
                     Text(
                         text = "Get a free API key at themoviedb.org ↗",
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = PotFlixRed,
+                            color = SamAccent,
                             fontWeight = FontWeight.SemiBold
                         ),
                         modifier = Modifier
@@ -609,9 +579,9 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PotFlixRed,
+                            focusedBorderColor = SamAccent,
                             unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
-                            focusedLabelColor = PotFlixRed,
+                            focusedLabelColor = SamAccent,
                             unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White
@@ -648,7 +618,7 @@ fun SettingsScreen(
                         viewModel.setCustomTmdbApiKey(inputKey)
                         showTmdbDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed),
+                    colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("Save Key", color = Color.White, fontWeight = FontWeight.Bold)
@@ -689,8 +659,8 @@ private fun SettingsCardGroup(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF13131A)),
-            border = BorderStroke(1.dp, Color(0xFF22222E))
+            colors = CardDefaults.cardColors(containerColor = SamBackground),
+            border = BorderStroke(1.dp, SamSurface)
         ) {
             Column(content = content)
         }
@@ -705,7 +675,7 @@ private fun ModernSettingsItem(
     subtitle: String,
     trailingValue: String? = null,
     trailingBadge: String? = null,
-    badgeColor: Color = PotFlixRed,
+    badgeColor: Color = SamAccent,
     isLoading: Boolean = false,
     showDivider: Boolean = true,
     onClick: () -> Unit
@@ -759,7 +729,7 @@ private fun ModernSettingsItem(
             // Trailing Accessory
             if (isLoading) {
                 CircularProgressIndicator(
-                    color = PotFlixRed,
+                    color = SamAccent,
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp
                 )
@@ -805,7 +775,7 @@ private fun ModernSettingsItem(
 
         if (showDivider) {
             HorizontalDivider(
-                color = Color(0xFF1E1E28),
+                color = SamSurface,
                 thickness = 0.6.dp,
                 modifier = Modifier.padding(start = 68.dp)
             )
@@ -872,16 +842,16 @@ private fun ModernSettingsSwitchItem(
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
-                    checkedTrackColor = PotFlixRed,
+                    checkedTrackColor = SamAccent,
                     uncheckedThumbColor = Color.White.copy(alpha = 0.6f),
-                    uncheckedTrackColor = Color(0xFF282834)
+                    uncheckedTrackColor = SamSurfaceRaised
                 )
             )
         }
 
         if (showDivider) {
             HorizontalDivider(
-                color = Color(0xFF1E1E28),
+                color = SamSurface,
                 thickness = 0.6.dp,
                 modifier = Modifier.padding(start = 68.dp)
             )

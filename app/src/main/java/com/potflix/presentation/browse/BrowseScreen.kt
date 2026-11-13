@@ -1,5 +1,7 @@
 package com.potflix.presentation.browse
 
+import com.potflix.presentation.theme.*
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -66,9 +68,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.potflix.presentation.navigation.Screen
-import com.potflix.presentation.theme.PotFlixCard
-import com.potflix.presentation.theme.PotFlixDark
-import com.potflix.presentation.theme.PotFlixRed
+import com.potflix.presentation.theme.SamSurface
+import com.potflix.presentation.theme.SamBackground
+import com.potflix.presentation.theme.SamAccent
 import kotlinx.coroutines.launch
 
 private val MutedText = Color.White.copy(alpha = 0.6f)
@@ -81,7 +83,7 @@ fun BrowseScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(PotFlixDark)
+            .background(SamBackground)
             .statusBarsPadding()
     ) {
         Text(
@@ -140,7 +142,7 @@ fun BrowseFolderScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(PotFlixDark)
+            .background(SamBackground)
             .statusBarsPadding()
     ) {
         Row(
@@ -182,8 +184,8 @@ fun BrowseFolderScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedBorderColor = PotFlixRed,
-                    cursorColor = PotFlixRed
+                    focusedBorderColor = SamAccent,
+                    cursorColor = SamAccent
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -192,7 +194,7 @@ fun BrowseFolderScreen(
         }
 
         when (val current = state) {
-            BrowseUiState.Loading -> CenteredBox { CircularProgressIndicator(color = PotFlixRed) }
+            BrowseUiState.Loading -> CenteredBox { CircularProgressIndicator(color = SamAccent) }
 
             BrowseUiState.Unreachable -> CenteredBox {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -205,7 +207,7 @@ fun BrowseFolderScreen(
                     )
                     Button(
                         onClick = viewModel::load,
-                        colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed)
+                        colors = ButtonDefaults.buttonColors(containerColor = SamAccent)
                     ) { Text("Retry") }
                 }
             }
@@ -286,11 +288,11 @@ private fun FolderRow(name: String, icon: ImageVector, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(PotFlixCard)
+            .background(SamSurface)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 14.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = PotFlixRed, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = SamAccent, modifier = Modifier.size(22.dp))
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = name,
@@ -318,7 +320,7 @@ private fun PosterCard(item: BrowseItem, poster: String?, onClick: () -> Unit) {
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(8.dp))
-                .background(PotFlixCard)
+                .background(SamSurface)
         ) {
             Icon(Icons.Default.Movie, contentDescription = null, tint = MutedText, modifier = Modifier.size(32.dp))
             if (poster != null) {

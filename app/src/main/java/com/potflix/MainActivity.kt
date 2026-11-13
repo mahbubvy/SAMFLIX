@@ -5,10 +5,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
-import com.potflix.presentation.navigation.BottomNavBar
+import androidx.compose.foundation.background
+import com.potflix.presentation.navigation.AppBottomBar
+import com.potflix.presentation.navigation.AppNavRail
+import com.potflix.presentation.navigation.Screen
+import com.potflix.presentation.theme.isWideWindow
 import com.potflix.presentation.navigation.PotFlixNavGraph
 import com.potflix.presentation.theme.PotFlixTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -31,9 +34,6 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var serverPreferences: com.potflix.data.local.preferences.ServerPreferences
     
-    @Inject
-    lateinit var firebaseSyncManager: com.potflix.data.remote.FirebaseSyncManager
-
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -51,27 +51,25 @@ class MainActivity : ComponentActivity() {
         setContent {
             PotFlixTheme {
                 val navController = rememberNavController()
-                val isTv = remember { com.potflix.util.TvUtils.isTelevision(this@MainActivity) }
-                val startDest = if (serverPreferences.isOnboardingCompleted()) com.potflix.presentation.navigation.Screen.Home.route else com.potflix.presentation.navigation.Screen.Onboarding.route
-                
-                if (isTv) {
-                    // TV Layout: Side Rail + Content
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        com.potflix.presentation.navigation.TvSideNavRail(navController = navController)
+                val startDest = if (serverPreferences.isOnboardingCompleted()) Screen.Home.route else Screen.Onboarding.route
+
+                if (isWideWindow()) {
+                    // Tablets and wide windows: tabs in a rail on the left.
+                    Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                        AppNavRail(navController = navController)
                         Surface(
                             modifier = Modifier.fillMaxSize(),
                             color = MaterialTheme.colorScheme.background
                         ) {
-                            PotFlixNavGraph(
-                                navController = navController,
-                                startDestination = startDest
-                            )
+                            PotFlixNavGraph(navController = navController, startDestination = startDest)
                         }
                     }
                 } else {
-                    // Mobile Layout: Bottom Nav Bar
+                    // Phones: tabs in a bar along the bottom.
                     Scaffold(
-                        bottomBar = { BottomNavBar(navController = navController) }
+                        bottomBar = { AppBottomBar(navController = navController) },
+                        containerColor = MaterialTheme.colorScheme.background,
+                        contentWindowInsets = WindowInsets(0)
                     ) { innerPadding ->
                         Surface(
                             modifier = Modifier
@@ -79,10 +77,7 @@ class MainActivity : ComponentActivity() {
                                 .padding(bottom = innerPadding.calculateBottomPadding()),
                             color = MaterialTheme.colorScheme.background
                         ) {
-                            PotFlixNavGraph(
-                                navController = navController,
-                                startDestination = startDest
-                            )
+                            PotFlixNavGraph(navController = navController, startDestination = startDest)
                         }
                     }
                 }

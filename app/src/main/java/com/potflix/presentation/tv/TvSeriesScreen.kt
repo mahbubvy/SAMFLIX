@@ -1,5 +1,10 @@
 package com.potflix.presentation.tv
 
+import com.potflix.presentation.home.CatalogueFilter
+import com.potflix.presentation.home.CatalogueHeader
+import com.potflix.presentation.home.CatalogueHeaderHeight
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +49,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 @Composable
 fun TvSeriesScreen(
     navController: NavController,
+    filter: CatalogueFilter = CatalogueFilter.All,
+    onFilterChange: (CatalogueFilter) -> Unit = {},
     viewModel: TvSeriesViewModel = hiltViewModel()
 ) {
     val categories by viewModel.categories.collectAsState()
@@ -68,7 +75,7 @@ fun TvSeriesScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0A0A))
+            .background(SamBackground)
             .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
         Crossfade(
@@ -149,73 +156,21 @@ fun TvSeriesScreen(
             LibraryEmptyState(onReload = viewModel::refresh)
         }
 
-        // Translucent Header Bar (Overlay on top)
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.95f),
-                            Color.Black.copy(alpha = 0.75f),
-                            Color.Transparent
-                        )
-                    )
-                )
-                .statusBarsPadding()
-                .padding(bottom = 4.dp)
-        ) {
-            // Logo + Title + Actions
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_potflix_logo_vector),
-                        contentDescription = "PotFlix",
-                        modifier = Modifier.height(40.dp)
-                    )
-                    Text(
-                        text = "TV Series",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp
-                        ),
-                        color = Color.White
-                    )
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(onClick = { navController.navigate(Screen.Search.route) }) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
-            }
-        }
+        CatalogueHeader(
+            filter = filter,
+            onFilterChange = onFilterChange,
+            onOpenSettings = { navController.navigate(Screen.Settings.route) },
+            syncMessage = null,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
 
         if (pullToRefreshState.verticalOffset > 0f || pullToRefreshState.isRefreshing) {
             PullToRefreshContainer(
                 state = pullToRefreshState,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 70.dp),
-                containerColor = Color(0xFF1E1E1E),
+                    .padding(top = CatalogueHeaderHeight),
+                containerColor = SamSurface,
                 contentColor = MaterialTheme.colorScheme.primary
             )
         }

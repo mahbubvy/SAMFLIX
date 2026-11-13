@@ -1,5 +1,7 @@
 package com.potflix.presentation.common
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -77,7 +79,7 @@ fun MovieCard(
             ),
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1E1E24)
+            containerColor = SamSurface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isFocused) 12.dp else 4.dp)
     ) {
@@ -120,7 +122,7 @@ fun MovieCard(
                     Icon(
                         imageVector = Icons.Default.Star,
                         contentDescription = "Rating",
-                        tint = Color(0xFFFFC107),
+                        tint = SamRating,
                         modifier = Modifier.size(10.dp)
                     )
                     Text(

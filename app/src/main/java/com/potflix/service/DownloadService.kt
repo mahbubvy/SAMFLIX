@@ -269,7 +269,7 @@ class DownloadService : Service() {
 
     private fun createNotification(text: String, progress: Int, max: Int): android.app.Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("PotFlix Download")
+            .setContentTitle("SAMFLIX download")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(max, progress, false)

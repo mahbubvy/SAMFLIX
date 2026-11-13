@@ -1,5 +1,7 @@
 package com.potflix.presentation.common
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,7 +26,7 @@ fun HeroBannerSkeleton(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(520.dp)
-            .background(Color(0xFF101010))
+            .background(SamBackground)
     ) {
         // Base shimmer across the entire banner backdrop
         Box(
@@ -58,9 +60,9 @@ fun HeroBannerSkeleton(modifier: Modifier = Modifier) {
                         colors = listOf(
                             Color.Transparent,
                             Color.Transparent,
-                            Color(0xFF0A0A0A).copy(alpha = 0.6f),
-                            Color(0xFF0A0A0A).copy(alpha = 0.95f),
-                            Color(0xFF0A0A0A)
+                            SamBackground.copy(alpha = 0.6f),
+                            SamBackground.copy(alpha = 0.95f),
+                            SamBackground
                         ),
                         startY = 150f
                     )
@@ -203,7 +205,7 @@ fun Top10RowSkeleton(modifier: Modifier = Modifier) {
                             .height(180.dp)
                             .align(Alignment.CenterEnd),
                         shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E24))
+                        colors = CardDefaults.cardColors(containerColor = SamSurface)
                     ) {
                         Box(
                             modifier = Modifier
@@ -258,7 +260,7 @@ fun CategoryRowSkeleton(modifier: Modifier = Modifier) {
                         .height(200.dp)
                         .padding(4.dp),
                     shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E24)),
+                    colors = CardDefaults.cardColors(containerColor = SamSurface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Box(
@@ -382,7 +384,7 @@ fun SearchGridSkeleton(
                     .height(190.dp)
                     .padding(2.dp),
                 shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E24))
+                colors = CardDefaults.cardColors(containerColor = SamSurface)
             ) {
                 Box(
                     modifier = Modifier

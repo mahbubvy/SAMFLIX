@@ -1,5 +1,7 @@
 package com.potflix.presentation.search
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,7 +36,7 @@ import androidx.navigation.NavController
 import com.potflix.presentation.common.MovieCard
 import com.potflix.presentation.common.SearchGridSkeleton
 import com.potflix.presentation.navigation.Screen
-import com.potflix.presentation.theme.PotFlixRed
+import com.potflix.presentation.theme.SamAccent
 
 @Composable
 fun SearchScreen(
@@ -63,7 +65,7 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
 
     Scaffold(
-        containerColor = Color(0xFF0A0A0A)
+        containerColor = SamBackground
     ) { padding ->
         Column(
             modifier = Modifier
@@ -90,7 +92,7 @@ fun SearchScreen(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = if (searchQuery.isNotEmpty()) PotFlixRed else Color.White.copy(alpha = 0.6f),
+                            tint = if (searchQuery.isNotEmpty()) SamAccent else Color.White.copy(alpha = 0.6f),
                             modifier = Modifier.size(20.dp)
                         )
                     },
@@ -123,11 +125,11 @@ fun SearchScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF181818),
-                        unfocusedContainerColor = Color(0xFF141414),
-                        focusedBorderColor = PotFlixRed,
+                        focusedContainerColor = SamSurface,
+                        unfocusedContainerColor = SamBackground,
+                        focusedBorderColor = SamAccent,
                         unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
-                        cursorColor = PotFlixRed
+                        cursorColor = SamAccent
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -152,7 +154,7 @@ fun SearchScreen(
                         label = { Text(type, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                         shape = RoundedCornerShape(16.dp),
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PotFlixRed,
+                            selectedContainerColor = SamAccent,
                             selectedLabelColor = Color.White,
                             containerColor = Color.White.copy(alpha = 0.07f),
                             labelColor = Color.White.copy(alpha = 0.75f)
@@ -161,7 +163,7 @@ fun SearchScreen(
                             enabled = true,
                             selected = isSelected,
                             borderColor = Color.White.copy(alpha = 0.15f),
-                            selectedBorderColor = PotFlixRed,
+                            selectedBorderColor = SamAccent,
                             borderWidth = 1.dp
                         ),
                         modifier = Modifier.height(32.dp)
@@ -186,7 +188,7 @@ fun SearchScreen(
                         label = { Text(sort, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                         shape = RoundedCornerShape(16.dp),
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFF333333),
+                            selectedContainerColor = SamSurfaceRaised,
                             selectedLabelColor = Color.White,
                             containerColor = Color.White.copy(alpha = 0.05f),
                             labelColor = Color.White.copy(alpha = 0.65f)
@@ -223,7 +225,7 @@ fun SearchScreen(
                             label = { Text(cat, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                             shape = RoundedCornerShape(16.dp),
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PotFlixRed.copy(alpha = 0.7f),
+                                selectedContainerColor = SamAccent.copy(alpha = 0.7f),
                                 selectedLabelColor = Color.White,
                                 containerColor = Color.White.copy(alpha = 0.05f),
                                 labelColor = Color.White.copy(alpha = 0.65f)
@@ -232,7 +234,7 @@ fun SearchScreen(
                                 enabled = true,
                                 selected = isSelected,
                                 borderColor = Color.White.copy(alpha = 0.15f),
-                                selectedBorderColor = PotFlixRed,
+                                selectedBorderColor = SamAccent,
                                 borderWidth = 1.dp
                             ),
                             modifier = Modifier.height(32.dp)
@@ -289,7 +291,7 @@ fun SearchScreen(
                                     items(recentSearches) { recent ->
                                         Surface(
                                             shape = RoundedCornerShape(16.dp),
-                                            color = Color(0xFF1E1E1E),
+                                            color = SamSurface,
                                             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                             onClick = {
                                                 viewModel.onQueryChange(recent)
@@ -342,7 +344,7 @@ fun SearchScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.TrendingUp,
                                     contentDescription = null,
-                                    tint = PotFlixRed,
+                                    tint = SamAccent,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
@@ -447,7 +449,7 @@ fun SearchScreen(
                                 viewModel.resetFilters()
                                 viewModel.onQueryChange("")
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = PotFlixRed),
+                            colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
                             shape = RoundedCornerShape(20.dp)
                         ) {
                             Text("Clear Filters & Search", fontWeight = FontWeight.Bold)

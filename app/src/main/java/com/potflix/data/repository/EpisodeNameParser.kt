@@ -12,7 +12,8 @@ private val EPISODE_WORD = Regex("""(?<![a-z])(?:episode|ep|e)[.\s_-]*(\d{1,3})(
 
 // A number standing on its own, like the "05" in "Show - 05 [720p].mkv". Release tags in
 // brackets are removed first, and "720p" style sizes don't count because a letter follows them.
-private val TAGS = Regex("""\[[^\]]*]|\([^)]*\)|\{[^}]*}""")
+// Every bracket is escaped: Android's regex engine (ICU) rejects a bare "]" or "}" that desktop Java allows.
+private val TAGS = Regex("""\[[^\]]*\]|\([^\)]*\)|\{[^\}]*\}""")
 private val BARE_NUMBER = Regex("""(?<![\da-z])(\d{1,3})(?![\da-z])""", RegexOption.IGNORE_CASE)
 
 /**

@@ -3,8 +3,6 @@ package com.potflix.presentation.navigation
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
     object Home : Screen("home")
-    object Movies : Screen("movies")
-    object TvSeries : Screen("tv_series")
     object Search : Screen("search") {
         const val routeWithArgs = "search?query={query}"
         fun createRoute(query: String = ""): String {
@@ -17,10 +15,8 @@ sealed class Screen(val route: String) {
             return "browse_folder/${android.net.Uri.encode(url)}/${android.net.Uri.encode(title)}?series=$isSeries"
         }
     }
+    object Library : Screen("library")
     object Settings : Screen("settings")
-    object Downloads : Screen("downloads")
-    object Watchlist : Screen("watchlist")
-    object Login : Screen("login")
     object CategoryDetail : Screen("category/{categoryId}/{categoryName}?type={type}") {
         fun createRoute(categoryId: String, categoryName: String, type: String = "category"): String {
             val encodedId = android.net.Uri.encode(categoryId)

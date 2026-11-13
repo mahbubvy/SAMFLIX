@@ -61,7 +61,7 @@ class DailyNotificationWorker @AssistedInject constructor(
             )
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_potflix_logo_vector)
+                .setSmallIcon(R.drawable.ic_samflix_mark)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -110,7 +110,7 @@ class DailyNotificationWorker @AssistedInject constructor(
             val titleTemplates = listOf(
                 "🍿 Tonight's Pick: $movieTitle$yearStr",
                 "🎬 Ready for movie night? Check out $movieTitle!",
-                "🔥 Trending on PotFlix: $movieTitle$yearStr",
+                "🔥 Trending on SAMFLIX: $movieTitle$yearStr",
                 "✨ Recommended for you: $movieTitle",
                 "🌟 Looking for something great to watch? $movieTitle"
             )
@@ -119,15 +119,15 @@ class DailyNotificationWorker @AssistedInject constructor(
             val body = if (!overview.isNullOrBlank()) {
                 if (overview.length > 180) overview.take(177) + "..." else overview
             } else {
-                "Stream now in high quality on PotFlix. Tap to start watching!"
+                "Stream now in high quality on SAMFLIX. Tap to start watching!"
             }
 
             Pair(titleTemplates.random(), body)
         } else {
             val genericHooks = listOf(
-                Pair("🍿 Movie night is calling!", "Discover thousands of movies and TV series streaming in high quality on PotFlix."),
+                Pair("🍿 Movie night is calling!", "Discover thousands of movies and TV series streaming in high quality on SAMFLIX."),
                 Pair("🎬 Looking for something to watch?", "Browse top-rated movies and trending TV shows ready for streaming."),
-                Pair("✨ Weekend watchlist ready?", "Pick up where you left off or find a new favorite story on PotFlix."),
+                Pair("✨ Weekend watchlist ready?", "Pick up where you left off or find a new favorite story on SAMFLIX."),
                 Pair("🔥 Binge-worthy shows are waiting!", "Catch up on trending TV series and high-definition cinema today.")
             )
             genericHooks.random()

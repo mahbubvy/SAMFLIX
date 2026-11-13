@@ -1,5 +1,7 @@
 package com.potflix.presentation.category
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -52,11 +54,11 @@ fun CategoryDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0A0A0A)
+                    containerColor = SamBackground
                 )
             )
         },
-        containerColor = Color(0xFF0A0A0A)
+        containerColor = SamBackground
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (isLoading && movies.isEmpty()) {

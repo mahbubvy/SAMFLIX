@@ -1,5 +1,7 @@
 package com.potflix.presentation.home
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,6 +50,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 @Composable
 fun HomeScreen(
     navController: NavController,
+    filter: CatalogueFilter = CatalogueFilter.All,
+    onFilterChange: (CatalogueFilter) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val categories by viewModel.categories.collectAsState()
@@ -85,7 +89,7 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0A0A))
+            .background(SamBackground)
             .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
         Crossfade(
@@ -185,100 +189,21 @@ fun HomeScreen(
             LibraryEmptyState(onReload = viewModel::refresh)
         }
 
-        // Floating Glassmorphism Header Bar (Overlay on top)
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.95f),
-                            Color.Black.copy(alpha = 0.75f),
-                            Color.Transparent
-                        )
-                    )
-                )
-                .statusBarsPadding()
-                .padding(bottom = 4.dp)
-        ) {
-            // Logo + Actions Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Brand Logo + Title
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_potflix_logo_vector),
-                        contentDescription = "PotFlix Logo",
-                        modifier = Modifier.height(40.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = buildAnnotatedString {
-                            withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color.White)) {
-                                append("POT")
-                            }
-                            withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color(0xFFE50914))) {
-                                append("FLIX")
-                            }
-                        },
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-
-                // Search Shortcut
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(onClick = { navController.navigate(Screen.Search.route) }) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
-            }
-
-
-            
-            if (isSyncing) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = syncProgress,
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
+        CatalogueHeader(
+            filter = filter,
+            onFilterChange = onFilterChange,
+            onOpenSettings = { navController.navigate(Screen.Settings.route) },
+            syncMessage = syncProgress.takeIf { isSyncing },
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
 
         if (pullToRefreshState.verticalOffset > 0f || pullToRefreshState.isRefreshing) {
             PullToRefreshContainer(
                 state = pullToRefreshState,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 70.dp),
-                containerColor = Color(0xFF1E1E1E),
+                    .padding(top = CatalogueHeaderHeight),
+                containerColor = SamSurface,
                 contentColor = MaterialTheme.colorScheme.primary
             )
         }
@@ -303,7 +228,7 @@ fun HomeScreen(
                         movieToDeleteFromHistory = null
                     }
                 ) {
-                    Text("Remove", color = Color(0xFFE50914), fontWeight = FontWeight.Bold)
+                    Text("Remove", color = SamAccent, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -311,7 +236,7 @@ fun HomeScreen(
                     Text("Cancel", color = Color.White.copy(alpha = 0.7f))
                 }
             },
-            containerColor = Color(0xFF1E1E24)
+            containerColor = SamSurface
         )
     }
 }

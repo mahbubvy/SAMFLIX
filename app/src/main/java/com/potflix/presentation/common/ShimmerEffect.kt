@@ -1,5 +1,7 @@
 package com.potflix.presentation.common
 
+import com.potflix.presentation.theme.*
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,11 +24,11 @@ fun shimmerBrush(
     if (!showShimmer) return Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
 
     val shimmerColors = listOf(
-        Color(0xFF161616),
-        Color(0xFF262626),
-        Color(0xFF383838),
-        Color(0xFF262626),
-        Color(0xFF161616),
+        SamBackground,
+        SamSurfaceRaised,
+        SamSurfaceRaised,
+        SamSurfaceRaised,
+        SamBackground,
     )
 
     val transition = rememberInfiniteTransition(label = "ShimmerTransition")
