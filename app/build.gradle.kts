@@ -56,9 +56,22 @@ android {
         }
     }
 
+    // Every SAMFLIX build must carry the same key, or phones refuse the update. The key is this
+    // PC's debug keystore; GitHub Actions passes its copy in through SAMFLIX_KEYSTORE.
+    signingConfigs {
+        create("samflix") {
+            val keystore = System.getenv("SAMFLIX_KEYSTORE")?.let { file(it) }
+                ?: File(System.getProperty("user.home"), ".android/debug.keystore")
+            storeFile = keystore
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("samflix")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
