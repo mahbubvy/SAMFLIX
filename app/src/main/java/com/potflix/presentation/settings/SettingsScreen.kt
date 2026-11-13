@@ -272,14 +272,14 @@ fun SettingsScreen(
                         showDivider = true
                     )
 
-                    // Version Info
+                    // Version, and a manual update check
                     ModernSettingsItem(
-                        icon = Icons.Default.Info,
-                        iconTint = Color.White.copy(alpha = 0.5f),
-                        title = "Version",
-                        subtitle = "SAMFLIX build ${BuildConfig.VERSION_NAME}",
+                        icon = Icons.Default.SystemUpdate,
+                        iconTint = SamAccent,
+                        title = "Check for updates",
+                        subtitle = "Updates download from GitHub and install with one tap",
                         trailingValue = "v${BuildConfig.VERSION_NAME}",
-                        onClick = {},
+                        onClick = { viewModel.checkForUpdates() },
                         showDivider = false
                     )
                 }
@@ -498,47 +498,6 @@ fun SettingsScreen(
         )
     }
     
-    val updateAvailable by viewModel.updateAvailable.collectAsState()
-    updateAvailable?.let { update ->
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissUpdateDialog() },
-            shape = RoundedCornerShape(22.dp),
-            containerColor = SamSurface,
-            title = { Text("Update Available: v${update.versionName}", fontWeight = FontWeight.Bold, color = Color.White) },
-            text = { 
-                Column {
-                    Text("A new version of SAMFLIX is ready to download.", color = Color.White)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(update.releaseNotes, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f))
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        try {
-                            val downloadUrl = update.getDownloadUrlForDevice()
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(downloadUrl))
-                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Could not open browser for download", Toast.LENGTH_SHORT).show()
-                        }
-                        viewModel.dismissUpdateDialog()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = SamAccent),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Download Update", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
-                    Text("Later", color = Color.White.copy(alpha = 0.7f))
-                }
-            }
-        )
-    }
-
     if (showTmdbDialog) {
         val currentCustomKey by viewModel.customTmdbApiKey.collectAsState()
         var inputKey by remember(currentCustomKey) { mutableStateOf(currentCustomKey) }

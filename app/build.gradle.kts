@@ -15,8 +15,17 @@ if (localPropertiesFile.exists()) {
 }
 val tmdbApiKey = localProperties.getProperty("TMDB_API_KEY") ?: System.getenv("TMDB_API_KEY") ?: "cdb4d6683a4de1f186e7da86dccdd7f1"
 
+// Each commit gets its own version, the same on this PC and on GitHub, so every push is an
+// update the phones will accept. Codes start above 302, the last hand-set version.
+val commitCount: Int = runCatching {
+    providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }
+        .standardOutput.asText.get().trim().toInt()
+}.getOrDefault(0)
+val samflixVersionCode = 400 + commitCount
+val samflixVersionName = "3.1.$commitCount"
+
 base {
-    archivesName.set("potflix")
+    archivesName.set("samflix")
 }
 
 android {
@@ -27,8 +36,8 @@ android {
         applicationId = "com.potflix.samonline"
         minSdk = 24
         targetSdk = 35
-        versionCode = 302
-        versionName = "3.0.0-samonline"
+        versionCode = samflixVersionCode
+        versionName = samflixVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -14,32 +14,12 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
-@androidx.annotation.Keep
-data class AppUpdate(
-    val versionCode: Int,
-    val versionName: String,
-    val apkUrl: String,
-    val releaseNotes: String,
-    val apkUrlArm64: String? = null,
-    val apkUrlArmV7: String? = null,
-    val apkUrlUniversal: String? = null
-) {
-    fun getDownloadUrlForDevice(): String {
-        val abis = android.os.Build.SUPPORTED_ABIS ?: emptyArray()
-        return when {
-            abis.contains("arm64-v8a") && !apkUrlArm64.isNullOrEmpty() -> apkUrlArm64
-            abis.contains("armeabi-v7a") && !apkUrlArmV7.isNullOrEmpty() -> apkUrlArmV7
-            !apkUrlUniversal.isNullOrEmpty() -> apkUrlUniversal
-            else -> apkUrl
-        }
-    }
-}
-
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val application: Application,
     private val serverPreferences: com.potflix.data.local.preferences.ServerPreferences,
-    private val firebaseSyncManager: com.potflix.data.remote.FirebaseSyncManager
+    private val firebaseSyncManager: com.potflix.data.remote.FirebaseSyncManager,
+    private val appUpdater: com.potflix.update.AppUpdater
 ) : ViewModel() {
 
     private val _cacheSize = MutableStateFlow("Calculating...")
@@ -271,143 +251,19 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private val _updateAvailable = MutableStateFlow<AppUpdate?>(null)
-    val updateAvailable: StateFlow<AppUpdate?> = _updateAvailable.asStateFlow()
-
+    /** Checks GitHub for a newer SAMFLIX. A found update downloads, then the app-wide prompt offers to install it. */
     fun checkForUpdates() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val client = okhttp3.OkHttpClient.Builder()
-                .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                .build()
-
-            // 1. Try querying GitHub Releases API for the latest published release
-            try {
-                val ghUrl = "https://api.github.com/repos/ReduanNurLabid/PotFlix/releases/latest"
-                val ghRequest = okhttp3.Request.Builder()
-                    .url(ghUrl)
-                    .header("Accept", "application/vnd.github.v3+json")
-                    .header("User-Agent", "PotFlix-Android-App")
-                    .build()
-
-                val ghResponse = client.newCall(ghRequest).execute()
-                if (ghResponse.isSuccessful) {
-                    val bodyStr = ghResponse.body?.string()
-                    if (!bodyStr.isNullOrBlank()) {
-                        val json = com.google.gson.JsonParser.parseString(bodyStr).asJsonObject
-                        val tagName = json.get("tag_name")?.asString ?: ""
-                        val releaseName = json.get("name")?.asString ?: tagName
-                        val releaseBody = json.get("body")?.asString ?: "New version available with improvements and fixes."
-
-                        if (isNewerVersion(tagName, com.potflix.BuildConfig.VERSION_NAME)) {
-                            val assetsArray = json.getAsJsonArray("assets")
-                            var arm64Url: String? = null
-                            var armV7Url: String? = null
-                            var universalUrl: String? = null
-                            var defaultApkUrl: String? = null
-
-                            if (assetsArray != null) {
-                                for (assetElem in assetsArray) {
-                                    val assetObj = assetElem.asJsonObject
-                                    val name = assetObj.get("name")?.asString ?: ""
-                                    val downloadUrl = assetObj.get("browser_download_url")?.asString ?: ""
-
-                                    if (name.contains("arm64-v8a", ignoreCase = true)) {
-                                        arm64Url = downloadUrl
-                                    } else if (name.contains("armeabi-v7a", ignoreCase = true)) {
-                                        armV7Url = downloadUrl
-                                    } else if (name.contains("universal", ignoreCase = true)) {
-                                        universalUrl = downloadUrl
-                                    } else if (name.endsWith(".apk", ignoreCase = true) && defaultApkUrl == null) {
-                                        defaultApkUrl = downloadUrl
-                                    }
-                                }
-                            }
-
-                            val resolvedApkUrl = arm64Url ?: armV7Url ?: universalUrl ?: defaultApkUrl
-                                ?: "https://github.com/ReduanNurLabid/PotFlix/releases/latest"
-
-                            val update = AppUpdate(
-                                versionCode = parseVersionCode(tagName),
-                                versionName = tagName.replace(Regex("[^0-9.]"), "").ifEmpty { releaseName },
-                                apkUrl = resolvedApkUrl,
-                                apkUrlArm64 = arm64Url,
-                                apkUrlArmV7 = armV7Url,
-                                apkUrlUniversal = universalUrl,
-                                releaseNotes = releaseBody
-                            )
-
-                            withContext(Dispatchers.Main) {
-                                _updateAvailable.value = update
-                            }
-                            return@launch
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.w("SettingsViewModel", "GitHub Releases check failed, trying update.json fallback: ${e.message}")
+        _toastMessage.value = "Checking for updates…"
+        viewModelScope.launch {
+            val message = when (val result = appUpdater.check(manual = true)) {
+                is com.potflix.update.UpdateState.UpToDate ->
+                    "You're on the latest version (${com.potflix.BuildConfig.VERSION_NAME})."
+                is com.potflix.update.UpdateState.Ready -> null // the update prompt takes over
+                is com.potflix.update.UpdateState.Failed -> "Couldn't check for updates: ${result.message}"
+                else -> null
             }
-
-            // 2. Fallback to update.json (checking android branch then main)
-            val updateUrls = listOf(
-                "https://raw.githubusercontent.com/ReduanNurLabid/PotFlix/android/update.json",
-                "https://raw.githubusercontent.com/ReduanNurLabid/PotFlix/main/update.json"
-            )
-
-            for (updateUrl in updateUrls) {
-                try {
-                    val request = okhttp3.Request.Builder().url(updateUrl).build()
-                    val response = client.newCall(request).execute()
-                    if (response.isSuccessful) {
-                        val body = response.body?.string()
-                        if (!body.isNullOrBlank()) {
-                            val update = com.google.gson.Gson().fromJson(body, AppUpdate::class.java)
-                            val isNewer = update.versionCode > com.potflix.BuildConfig.VERSION_CODE ||
-                                    isNewerVersion(update.versionName, com.potflix.BuildConfig.VERSION_NAME)
-                            if (isNewer) {
-                                withContext(Dispatchers.Main) {
-                                    _updateAvailable.value = update
-                                }
-                                return@launch
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.w("SettingsViewModel", "Failed to check update from $updateUrl: ${e.message}")
-                }
-            }
-
-            withContext(Dispatchers.Main) {
-                _toastMessage.value = "You are on the latest version! (v${com.potflix.BuildConfig.VERSION_NAME})"
-            }
+            message?.let { _toastMessage.value = it }
         }
-    }
-
-    private fun isNewerVersion(remoteStr: String, currentStr: String): Boolean {
-        val cleanRemote = remoteStr.replace(Regex("[^0-9.]"), "").split(".").mapNotNull { it.toIntOrNull() }
-        val cleanCurrent = currentStr.replace(Regex("[^0-9.]"), "").split(".").mapNotNull { it.toIntOrNull() }
-        val maxLen = maxOf(cleanRemote.size, cleanCurrent.size)
-        for (i in 0 until maxLen) {
-            val r = cleanRemote.getOrElse(i) { 0 }
-            val c = cleanCurrent.getOrElse(i) { 0 }
-            if (r > c) return true
-            if (r < c) return false
-        }
-        return false
-    }
-
-    private fun parseVersionCode(versionStr: String): Int {
-        val parts = versionStr.replace(Regex("[^0-9.]"), "").split(".").mapNotNull { it.toIntOrNull() }
-        return when (parts.size) {
-            3 -> parts[0] * 100 + parts[1] * 10 + parts[2]
-            2 -> parts[0] * 100 + parts[1] * 10
-            1 -> parts[0]
-            else -> com.potflix.BuildConfig.VERSION_CODE + 1
-        }
-    }
-    
-    fun dismissUpdateDialog() {
-        _updateAvailable.value = null
     }
 
     private fun getDirSize(dir: File): Long {

@@ -1,0 +1,64 @@
+# Builds SAMFLIX on every push to samonline and publishes it as a GitHub release.
+# The app checks the latest release and offers to install it.
+name: SAMFLIX release
+
+on:
+  push:
+    branches: [samonline]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'ftp_crawler/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: samflix-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the version number is the commit count
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Updates only install over the existing app when signed with the same key,
+      # so the build uses the key the phones' copy was signed with.
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.SAMFLIX_SIGNING_KEYSTORE }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "The SAMFLIX_SIGNING_KEYSTORE secret is missing."; exit 1; fi
+          mkdir -p ~/.android
+          echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+
+      - name: Test and build
+        run: ./gradlew --no-daemon testReleaseUnitTest assembleRelease
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Same formula as app/build.gradle.kts.
+          VERSION="3.1.$(git rev-list --count HEAD)"
+          mkdir -p out
+          for abi in arm64-v8a armeabi-v7a; do
+            cp "app/build/outputs/apk/release/samflix-$abi-release.apk" "out/SAMFLIX-$VERSION-$abi.apk"
+          done
+          git log -1 --format=%B > notes.txt
+          gh release create "v$VERSION" out/*.apk \
+            --title "SAMFLIX $VERSION" \
+            --notes-file notes.txt \
+            --target "$GITHUB_SHA" \
+            --latest

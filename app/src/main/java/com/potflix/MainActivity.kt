@@ -33,6 +33,9 @@ class MainActivity : ComponentActivity() {
     
     @Inject
     lateinit var serverPreferences: com.potflix.data.local.preferences.ServerPreferences
+
+    @Inject
+    lateinit var appUpdater: com.potflix.update.AppUpdater
     
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -52,6 +55,7 @@ class MainActivity : ComponentActivity() {
             PotFlixTheme {
                 val navController = rememberNavController()
                 val startDest = if (serverPreferences.isOnboardingCompleted()) Screen.Home.route else Screen.Onboarding.route
+                com.potflix.update.UpdatePrompt(updater = appUpdater)
 
                 if (isWideWindow()) {
                     // Tablets and wide windows: tabs in a rail on the left.
