@@ -57,6 +57,7 @@ fun SettingsScreen(
     var showClearCacheDialog by remember { mutableStateOf(false) }
     val activeServer by viewModel.activeServer.collectAsState()
     var showServerDialog by remember { mutableStateOf(false) }
+    var showSyncCodeDialog by remember { mutableStateOf(false) }
     var showAudioLangDialog by remember { mutableStateOf(false) }
     var showSubtitleLangDialog by remember { mutableStateOf(false) }
     var showTmdbDialog by remember { mutableStateOf(false) }
@@ -243,6 +244,47 @@ fun SettingsScreen(
                 }
             }
 
+            // ─── SYNC ───
+            item {
+                val sync by viewModel.librarySync.status.collectAsState()
+                SettingsCardGroup(title = "Sync between devices") {
+                    ModernSettingsSwitchItem(
+                        icon = Icons.Default.Sync,
+                        iconTint = SamAccent,
+                        title = "Sync on Wi-Fi",
+                        subtitle = "Share watchlist and history with your other devices on the same Wi-Fi. Nothing goes to the cloud.",
+                        checked = sync.enabled,
+                        onCheckedChange = { if (it) viewModel.librarySync.enable() else viewModel.librarySync.disable() },
+                        showDivider = sync.enabled
+                    )
+                    if (sync.enabled) {
+                        ModernSettingsItem(
+                            icon = Icons.Default.Key,
+                            iconTint = SamAccent,
+                            title = "Sync code",
+                            subtitle = "Type this code on your other devices to link them",
+                            trailingValue = sync.code?.let { com.potflix.sync.SyncCrypto.format(it) },
+                            onClick = { showSyncCodeDialog = true },
+                            showDivider = true
+                        )
+                        val lastSync = sync.lastSyncAt?.let {
+                            "Last synced with ${sync.lastSyncWith} " +
+                                android.text.format.DateUtils.getRelativeTimeSpanString(it).toString().lowercase()
+                        }
+                        ModernSettingsItem(
+                            icon = Icons.Default.Devices,
+                            iconTint = if (sync.problem != null) SamError else SamAccent,
+                            title = if (sync.nearby.isEmpty()) "No devices found yet" else sync.nearby.joinToString(", "),
+                            subtitle = sync.problem ?: lastSync
+                                ?: "Open SAMFLIX on another device on this Wi-Fi with the same code",
+                            trailingBadge = if (sync.nearby.isNotEmpty()) "Sync now" else null,
+                            onClick = { viewModel.librarySync.syncNow() },
+                            showDivider = false
+                        )
+                    }
+                }
+            }
+
             // ─── COMMUNITY & SUPPORT GROUP ───
             item {
                 SettingsCardGroup(title = "Community & Support") {
@@ -288,6 +330,72 @@ fun SettingsScreen(
     }
 
     // ─── DIALOGS ───
+
+    if (showSyncCodeDialog) {
+        val sync by viewModel.librarySync.status.collectAsState()
+        var typed by remember { mutableStateOf("") }
+        var invalid by remember { mutableStateOf(false) }
+        var confirmNewCode by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { showSyncCodeDialog = false },
+            shape = RoundedCornerShape(22.dp),
+            containerColor = SamSurface,
+            title = { Text("Sync code", fontWeight = FontWeight.Bold, color = SamText) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Devices with the same code share their watchlist and history. This device's code:",
+                        color = SamTextMuted, style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        sync.code?.let { com.potflix.sync.SyncCrypto.format(it) } ?: "",
+                        color = SamText, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold
+                    )
+                    Text("To link to another device, type its code:", color = SamTextMuted, style = MaterialTheme.typography.bodyMedium)
+                    OutlinedTextField(
+                        value = typed,
+                        onValueChange = { typed = it.uppercase(); invalid = false },
+                        singleLine = true,
+                        placeholder = { Text("XXXXX-XXXXX") },
+                        isError = invalid,
+                        supportingText = if (invalid) { { Text("That isn't a valid code. Codes have 10 letters and digits.") } } else null,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    TextButton(onClick = { confirmNewCode = true }) {
+                        Text("Make a new code (unlinks other devices)", color = SamTextMuted)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = typed.isNotBlank(),
+                    onClick = {
+                        if (viewModel.librarySync.join(typed)) {
+                            showSyncCodeDialog = false
+                            Toast.makeText(context, "Linked. Syncing with devices that use this code.", Toast.LENGTH_SHORT).show()
+                        } else invalid = true
+                    }
+                ) { Text("Link", color = SamAccent) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSyncCodeDialog = false }) { Text("Close", color = SamTextMuted) }
+            }
+        )
+        if (confirmNewCode) {
+            AlertDialog(
+                onDismissRequest = { confirmNewCode = false },
+                containerColor = SamSurface,
+                title = { Text("Make a new code?", color = SamText) },
+                text = { Text("Other devices stop syncing with this one until you type the new code on them.", color = SamTextMuted) },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.librarySync.newCode(); confirmNewCode = false }) {
+                        Text("New code", color = SamAccent)
+                    }
+                },
+                dismissButton = { TextButton(onClick = { confirmNewCode = false }) { Text("Cancel", color = SamTextMuted) } }
+            )
+        }
+    }
 
     if (showServerDialog) {
         AlertDialog(

@@ -23,6 +23,8 @@ interface MovieRepository {
     suspend fun updateWatchProgress(movieUrl: String, streamUrl: String, position: Long, duration: Long)
     suspend fun removeFromWatchHistory(movieUrl: String)
     fun getWatchHistoryFlow(): Flow<List<Movie>>
+    /** Replaces the whole watch history, newest first. Used by library sync. */
+    suspend fun replaceWatchHistory(history: List<Movie>)
 
     // TMDB metadata editing & corrections
     suspend fun searchTmdb(query: String, type: String): Result<List<com.potflix.data.remote.TmdbMovieDto>>

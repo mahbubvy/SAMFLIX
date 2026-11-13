@@ -36,6 +36,19 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var appUpdater: com.potflix.update.AppUpdater
+
+    @Inject
+    lateinit var librarySync: com.potflix.sync.LibrarySync
+
+    override fun onStart() {
+        super.onStart()
+        librarySync.start()
+    }
+
+    override fun onStop() {
+        librarySync.stop()
+        super.onStop()
+    }
     
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()

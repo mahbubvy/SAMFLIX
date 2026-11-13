@@ -538,6 +538,12 @@ class MovieRepositoryImpl @Inject constructor(
         return _watchHistory.asStateFlow()
     }
 
+    override suspend fun replaceWatchHistory(history: List<Movie>) {
+        val trimmed = history.take(15)
+        _watchHistory.value = trimmed
+        prefs.edit().putString("history", gson.toJson(trimmed)).apply()
+    }
+
     override suspend fun updateWatchProgress(movieUrl: String, streamUrl: String, position: Long, duration: Long) {
         if (position <= 0L && duration <= 0L) return // Nothing to save
         

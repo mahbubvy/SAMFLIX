@@ -19,7 +19,8 @@ class SettingsViewModel @Inject constructor(
     private val application: Application,
     private val serverPreferences: com.potflix.data.local.preferences.ServerPreferences,
     private val firebaseSyncManager: com.potflix.data.remote.FirebaseSyncManager,
-    private val appUpdater: com.potflix.update.AppUpdater
+    private val appUpdater: com.potflix.update.AppUpdater,
+    val librarySync: com.potflix.sync.LibrarySync
 ) : ViewModel() {
 
     private val _cacheSize = MutableStateFlow("Calculating...")

@@ -42,3 +42,5 @@
 
 # mpv's native code calls back into these classes by name
 -keep class is.xyz.mpv.** { *; }
+# Library sync entries and messages are written as JSON.
+-keep class com.potflix.sync.** { *; }
