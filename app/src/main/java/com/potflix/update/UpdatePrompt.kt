@@ -12,7 +12,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,16 +25,14 @@ import com.potflix.presentation.theme.SamTextMuted
 import com.potflix.presentation.theme.Space
 
 /**
- * Checks for an update when the app opens and, once one is downloaded, offers to install it.
- * "Later" hides the offer until the app is next opened.
+ * Offers to install an update once one has downloaded. Updates are only looked for when the
+ * user taps "Check for updates" in Settings; the app never checks on its own.
  */
 @Composable
 fun UpdatePrompt(updater: AppUpdater) {
     val state by updater.state.collectAsState()
     var dismissedVersion by rememberSaveable { mutableStateOf<String?>(null) }
     var waitingForPermission by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) { updater.check(manual = false) }
 
     val ready = state as? UpdateState.Ready ?: return
     if (ready.version == dismissedVersion) return

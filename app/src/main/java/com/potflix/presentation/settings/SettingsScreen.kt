@@ -319,7 +319,7 @@ fun SettingsScreen(
                         icon = Icons.Default.SystemUpdate,
                         iconTint = SamAccent,
                         title = "Check for updates",
-                        subtitle = "Updates download from GitHub and install with one tap",
+                        subtitle = "Looks for a newer version on GitHub and offers to install it",
                         trailingValue = "v${BuildConfig.VERSION_NAME}",
                         onClick = { viewModel.checkForUpdates() },
                         showDivider = false
