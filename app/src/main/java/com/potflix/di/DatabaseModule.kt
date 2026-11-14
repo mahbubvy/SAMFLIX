@@ -22,6 +22,7 @@ object DatabaseModule {
             PotFlixDatabase::class.java,
             PotFlixDatabase.DATABASE_NAME
         )
+            .addMigrations(PotFlixDatabase.MIGRATION_12_13)
             .fallbackToDestructiveMigration()
             .build()
     }

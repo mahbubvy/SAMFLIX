@@ -29,6 +29,10 @@ import com.potflix.data.local.entity.LocalDownloadEntity
 import com.potflix.presentation.navigation.Screen
 import com.potflix.service.DownloadService
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.potflix.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +75,12 @@ fun DownloadsScreen(
 }
 
 @Composable
-fun DownloadItemCard(download: LocalDownloadEntity, navController: NavController, viewModel: DownloadsViewModel) {
+fun DownloadItemCard(
+    download: LocalDownloadEntity,
+    navController: NavController,
+    viewModel: DownloadsViewModel,
+    label: String = download.title
+) {
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     Card(
@@ -95,9 +104,9 @@ fun DownloadItemCard(download: LocalDownloadEntity, navController: NavController
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = download.title,
+                    text = label,
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -195,4 +204,124 @@ fun DownloadItemCard(download: LocalDownloadEntity, navController: NavController
             }
         )
     }
+}
+
+/** A downloaded movie or series in the Library grid: its poster, name and episode count. */
+@Composable
+fun DownloadGroupCard(group: DownloadGroup, onClick: () -> Unit) {
+    val active = group.items.filter { it.download.status != DownloadService.STATUS_SUCCESSFUL }
+    val done = group.items.size - active.size
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(Space.xs)
+            .clip(SamShapes.poster)
+            .clickable(onClick = onClick)
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(SamShapes.poster).background(SamSurfaceRaised)) {
+            AsyncImage(
+                model = group.poster,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (group.isSeries) {
+                Text(
+                    text = "${group.items.size} ep",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SamOnAccent,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(Space.s)
+                        .clip(SamShapes.chip)
+                        .background(SamAccent)
+                        .padding(horizontal = Space.s, vertical = 2.dp)
+                )
+            }
+            if (active.isNotEmpty()) {
+                val progress = active.sumOf { it.download.progress } / (active.size * 100f)
+                LinearProgressIndicator(
+                    progress = { progress },
+                    color = SamAccent,
+                    trackColor = SamBackground.copy(alpha = 0.6f),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp)
+                )
+            }
+        }
+        Text(
+            text = group.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = SamText,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = Space.s)
+        )
+        val size = group.items.sumOf { maxOf(it.download.totalBytes, it.download.bytesDownloaded) }
+        val status = when {
+            active.isEmpty() -> formatSize(size)
+            active.any { it.download.status == DownloadService.STATUS_RUNNING } -> "Downloading ${active.size}"
+            else -> "${active.size} paused or failed"
+        }
+        Text(
+            text = if (group.isSeries && active.isEmpty()) "$done episodes · $status" else status,
+            style = MaterialTheme.typography.bodySmall,
+            color = SamTextMuted,
+            maxLines = 1
+        )
+    }
+}
+
+/** Inside a downloaded title: its episodes in order, each playable offline. */
+@Composable
+fun DownloadGroupDetail(
+    group: DownloadGroup,
+    onBack: () -> Unit,
+    navController: NavController,
+    viewModel: DownloadsViewModel
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.xs)
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to downloads", tint = SamText)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(group.title, style = MaterialTheme.typography.titleMedium, color = SamText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    if (group.isSeries) "${group.items.size} episodes downloaded" else "Movie",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SamTextMuted
+                )
+            }
+        }
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = screenEdgePadding(), vertical = Space.s),
+            verticalArrangement = Arrangement.spacedBy(Space.m),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(group.items, key = { it.download.downloadId }) { item ->
+                DownloadItemCard(item.download, navController, viewModel, label = episodeLabel(group, item))
+            }
+        }
+    }
+}
+
+private fun episodeLabel(group: DownloadGroup, item: DownloadedItem): String {
+    if (!group.isSeries) return item.download.title
+    val name = item.download.title.substringAfter(" - S", "").substringAfter(" - ", "").trim()
+    val number = when {
+        item.season != null && item.episode != null -> "S${item.season} · E${item.episode}"
+        item.episode != null -> "Episode ${item.episode}"
+        else -> null
+    }
+    return listOfNotNull(number, name.takeIf { it.isNotBlank() && it != "null" }).joinToString("  ")
+        .ifBlank { item.download.title }
+}
+
+private fun formatSize(bytes: Long): String = when {
+    bytes <= 0 -> "Downloaded"
+    bytes >= 1L shl 30 -> String.format(java.util.Locale.US, "%.1f GB", bytes / (1L shl 30).toFloat())
+    else -> "${bytes / (1L shl 20)} MB"
 }

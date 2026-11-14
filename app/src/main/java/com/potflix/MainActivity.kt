@@ -58,11 +58,19 @@ class MainActivity : ComponentActivity() {
         }
     }
     
+    private val requestStoragePermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         // Request POST_NOTIFICATIONS on Android 13+ and ensure daily recommendations are scheduled
         checkNotificationPermissionAndSchedule()
+        // Android 10 and older need permission to save downloads where file managers can see them.
+        if (com.potflix.util.DownloadFiles.needsStoragePermission(this)) {
+            requestStoragePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
         
         setContent {
             PotFlixTheme {

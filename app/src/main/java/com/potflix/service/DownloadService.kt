@@ -17,6 +17,7 @@ import java.io.File
 import java.io.RandomAccessFile
 import javax.inject.Inject
 import android.os.Environment
+import com.potflix.util.DownloadFiles
 
 @AndroidEntryPoint
 class DownloadService : Service() {
@@ -37,6 +38,8 @@ class DownloadService : Service() {
         const val EXTRA_URL = "EXTRA_URL"
         const val EXTRA_TITLE = "EXTRA_TITLE"
         const val EXTRA_POSTER = "EXTRA_POSTER"
+        const val EXTRA_SERIES_TITLE = "EXTRA_SERIES_TITLE"
+        const val EXTRA_SERIES_POSTER = "EXTRA_SERIES_POSTER"
         
         // Status constants
         const val STATUS_PENDING = 1 shl 0
@@ -62,10 +65,12 @@ class DownloadService : Service() {
             val url = it.getStringExtra(EXTRA_URL)
             val title = it.getStringExtra(EXTRA_TITLE)
             val poster = it.getStringExtra(EXTRA_POSTER)
+            val seriesTitle = it.getStringExtra(EXTRA_SERIES_TITLE)
+            val seriesPoster = it.getStringExtra(EXTRA_SERIES_POSTER)
 
             if (id != -1L) {
                 when (action) {
-                    ACTION_START -> if (url != null && title != null) startDownload(id, url, title, poster)
+                    ACTION_START -> if (url != null && title != null) startDownload(id, url, title, poster, seriesTitle = seriesTitle, seriesPoster = seriesPoster)
                     ACTION_PAUSE -> pauseDownload(id)
                     ACTION_RESUME -> if (url != null && title != null) startDownload(id, url, title, poster, isResume = true)
                     ACTION_CANCEL -> cancelDownload(id)
@@ -75,7 +80,10 @@ class DownloadService : Service() {
         return START_STICKY
     }
 
-    private fun startDownload(id: Long, url: String, title: String, poster: String?, isResume: Boolean = false) {
+    private fun startDownload(
+        id: Long, url: String, title: String, poster: String?, isResume: Boolean = false,
+        seriesTitle: String? = null, seriesPoster: String? = null
+    ) {
         if (activeDownloads.containsKey(id)) return // Already downloading
         
         val job = serviceScope.launch {
@@ -90,7 +98,9 @@ class DownloadService : Service() {
                         localUri = null,
                         poster = poster,
                         status = STATUS_RUNNING,
-                        progress = 0
+                        progress = 0,
+                        seriesTitle = seriesTitle,
+                        seriesPoster = seriesPoster
                     )
                     localDownloadDao.insert(entity)
                 } else {
@@ -98,13 +108,17 @@ class DownloadService : Service() {
                     localDownloadDao.update(entity)
                 }
 
-                val downloadDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-                val appDir = File(downloadDir, "PotFlix")
-                if (!appDir.exists()) appDir.mkdirs()
-                
-                // Filename safe
-                val safeTitle = title.replace("""[\\/:*?"<>|]""".toRegex(), "_")
-                val file = File(appDir, "$safeTitle.mp4")
+                // Keep writing to the same file when resuming; new downloads go to Movies/SAMFLIX.
+                val legacyPartial = File(File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), "PotFlix"),
+                    title.replace(Regex("""[\\/:*?"<>|]"""), "_") + ".mp4")
+                val knownPath = entity.localUri
+                val file = knownPath?.let(::File)?.takeIf { isResume && it.exists() }
+                    ?: legacyPartial.takeIf { isResume && knownPath == null && it.exists() }
+                    ?: DownloadFiles.fileFor(applicationContext, title, url, entity.seriesTitle)
+                if (entity.localUri != file.absolutePath) {
+                    entity = entity.copy(localUri = file.absolutePath)
+                    localDownloadDao.update(entity)
+                }
 
                 var downloadedBytes = 0L
                 if (isResume && file.exists()) {
@@ -190,6 +204,7 @@ class DownloadService : Service() {
                             )
                         )
                     }
+                    DownloadFiles.announce(applicationContext, file)
                     updateNotification("$title Downloaded", 100, 100)
                 }
 
@@ -234,12 +249,12 @@ class DownloadService : Service() {
             val entity = localDownloadDao.getDownloadById(id)
             if (entity != null) {
                 localDownloadDao.deleteById(id)
-                // Delete file
-                val downloadDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-                val appDir = File(downloadDir, "PotFlix")
-                val safeTitle = entity.title.replace("""[\\/:*?"<>|]""".toRegex(), "_")
-                val file = File(appDir, "$safeTitle.mp4")
-                if (file.exists()) file.delete()
+                // Delete the file, and the series folder once it's empty.
+                val file = entity.localUri?.let(::File)
+                if (file != null && file.exists() && file.delete()) {
+                    DownloadFiles.announce(applicationContext, file)
+                    file.parentFile?.takeIf { it.name != "SAMFLIX" && it.list().isNullOrEmpty() }?.delete()
+                }
             }
             checkStopSelf()
         }

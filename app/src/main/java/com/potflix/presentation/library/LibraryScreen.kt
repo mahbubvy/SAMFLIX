@@ -34,7 +34,9 @@ import com.potflix.presentation.common.MovieCard
 import com.potflix.presentation.common.SamChipRow
 import com.potflix.presentation.common.SamTopBar
 import com.potflix.presentation.common.SettingsAction
-import com.potflix.presentation.downloads.DownloadItemCard
+import com.potflix.presentation.downloads.DownloadGroupCard
+import com.potflix.presentation.downloads.DownloadGroupDetail
+import androidx.activity.compose.BackHandler
 import com.potflix.presentation.downloads.DownloadsViewModel
 import com.potflix.presentation.navigation.Screen
 import com.potflix.presentation.navigation.playHero
@@ -59,7 +61,8 @@ fun LibraryScreen(
     var section by rememberSaveable { mutableStateOf(LibrarySection.History) }
     val history by libraryViewModel.history.collectAsState()
     val watchlist by watchlistViewModel.watchlist.collectAsState()
-    val downloads by downloadsViewModel.downloads.collectAsState()
+    val downloadGroups by downloadsViewModel.groups.collectAsState()
+    var openGroupKey by rememberSaveable { mutableStateOf<String?>(null) }
     var historyToRemove by remember { mutableStateOf<Movie?>(null) }
     val edge = screenEdgePadding()
 
@@ -83,16 +86,22 @@ fun LibraryScreen(
                 emptyText = "Your watchlist is empty. Add titles from their detail page to find them here.",
                 onOpen = { movie -> navController.navigate(Screen.Detail.createRoute(movie)) }
             )
-            LibrarySection.Downloads -> if (downloads.isEmpty()) {
-                EmptyNote("No downloads yet. Downloaded videos play without a connection to the server.")
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = edge, vertical = Space.s),
-                    verticalArrangement = Arrangement.spacedBy(Space.m),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(downloads, key = { it.downloadId }) { download ->
-                        DownloadItemCard(download, navController, downloadsViewModel)
+            LibrarySection.Downloads -> {
+                val group = downloadGroups.firstOrNull { it.key == openGroupKey }
+                if (group != null) {
+                    BackHandler { openGroupKey = null }
+                    DownloadGroupDetail(group, onBack = { openGroupKey = null }, navController, downloadsViewModel)
+                } else if (downloadGroups.isEmpty()) {
+                    EmptyNote("No downloads yet. Downloaded videos play without a connection to the server, and you'll find them in your phone's Movies/SAMFLIX folder.")
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 120.dp),
+                        contentPadding = PaddingValues(horizontal = edge - Space.xs, vertical = Space.s),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(downloadGroups, key = { it.key }) { item ->
+                            DownloadGroupCard(item, onClick = { openGroupKey = item.key })
+                        }
                     }
                 }
             }

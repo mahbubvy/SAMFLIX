@@ -12,13 +12,15 @@ import javax.inject.Singleton
 class DownloadHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    fun startDownload(title: String, streamUrl: String, poster: String?) {
+    fun startDownload(title: String, streamUrl: String, poster: String?, seriesTitle: String? = null, seriesPoster: String? = null) {
         val intent = Intent(context, DownloadService::class.java).apply {
             action = DownloadService.ACTION_START
             putExtra(DownloadService.EXTRA_ID, System.currentTimeMillis())
             putExtra(DownloadService.EXTRA_URL, streamUrl)
             putExtra(DownloadService.EXTRA_TITLE, title)
             putExtra(DownloadService.EXTRA_POSTER, poster)
+            putExtra(DownloadService.EXTRA_SERIES_TITLE, seriesTitle)
+            putExtra(DownloadService.EXTRA_SERIES_POSTER, seriesPoster)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)

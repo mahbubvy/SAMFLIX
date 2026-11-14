@@ -16,5 +16,8 @@ data class LocalDownloadEntity(
     val bytesDownloaded: Long = 0L,
     val speedBytesPerSecond: Long = 0L,
     val etaSeconds: Long = 0L,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    /** The show an episode belongs to; null for a movie. */
+    val seriesTitle: String? = null,
+    val seriesPoster: String? = null
 )

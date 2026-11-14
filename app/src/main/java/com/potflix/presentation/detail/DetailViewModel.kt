@@ -241,8 +241,8 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun startDownload(title: String, streamUrl: String, poster: String?) {
-        downloadHelper.startDownload(title, streamUrl, poster)
+    fun startDownload(title: String, streamUrl: String, poster: String?, seriesTitle: String? = null, seriesPoster: String? = null) {
+        downloadHelper.startDownload(title, streamUrl, poster, seriesTitle, seriesPoster)
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             android.widget.Toast.makeText(context, "Download started: $title", android.widget.Toast.LENGTH_SHORT).show()
         }

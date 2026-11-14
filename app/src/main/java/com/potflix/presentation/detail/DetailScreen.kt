@@ -894,7 +894,9 @@ fun DetailScreen(
                                             viewModel.startDownload(
                                                 title = fullTitle,
                                                 streamUrl = episode.url,
-                                                poster = episode.stillPath ?: movie?.poster
+                                                poster = episode.stillPath ?: movie?.poster,
+                                                seriesTitle = movie?.title ?: "TV Show",
+                                                seriesPoster = movie?.poster
                                             )
                                         } else {
                                             navController.navigate(Screen.Library.route)

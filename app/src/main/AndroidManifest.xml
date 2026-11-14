@@ -8,11 +8,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 10 and older need this to save downloads into the shared Movies folder. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
     <application
+        android:requestLegacyExternalStorage="true"
         android:name=".PotFlixApplication"
         android:allowBackup="true"
         android:networkSecurityConfig="@xml/network_security_config"
