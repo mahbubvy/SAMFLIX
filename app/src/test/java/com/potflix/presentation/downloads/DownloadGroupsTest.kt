@@ -8,8 +8,10 @@ import org.junit.Test
 
 class DownloadGroupsTest {
     private var nextId = 1L
-    private fun dl(title: String, url: String = "http://s/x/$title.mkv", time: Long = nextId, series: String? = null) =
-        LocalDownloadEntity(nextId++, title, url, null, "p", 8, 100, timestamp = time, seriesTitle = series)
+    private fun dl(
+        title: String, url: String = "http://s/x/$title.mkv", time: Long = nextId, series: String? = null,
+        poster: String = "frame", cover: String? = null
+    ) = LocalDownloadEntity(nextId++, title, url, null, poster, 8, 100, timestamp = time, seriesTitle = series, seriesPoster = cover)
 
     @Test
     fun episodesGroupUnderTheirShowInOrder() {
@@ -43,5 +45,18 @@ class DownloadGroupsTest {
         assertEquals("Show", groups[0].title)
         assertEquals(3, groups[0].items[0].season)
         assertEquals(7, groups[0].items[0].episode)
+    }
+
+    @Test
+    fun theShowsCoverBeatsEpisodeFrames() {
+        val groups = groupDownloads(
+            listOf(
+                dl("Dark - S1E1 - A", poster = "frame1"),
+                dl("Dark - S1E2 - B", poster = "frame2", cover = "dark-poster"),
+                dl("Movie", poster = "frame3", cover = "movie-poster")
+            )
+        )
+        assertEquals("dark-poster", groups.first { it.isSeries }.poster)
+        assertEquals("movie-poster", groups.first { !it.isSeries }.poster)
     }
 }

@@ -37,7 +37,7 @@ fun groupDownloads(downloads: List<LocalDownloadEntity>): List<DownloadGroup> {
             val key = "movie:${download.streamUrl}"
             groups[key] = mutableListOf(DownloadedItem(download, null, null))
             names[key] = download.title
-            posters[key] = download.poster
+            posters[key] = download.seriesPoster ?: download.poster
             continue
         }
         val fromFile = parseEpisodeNumbers(download.streamUrl.substringAfterLast('/'))
@@ -46,7 +46,9 @@ fun groupDownloads(downloads: List<LocalDownloadEntity>): List<DownloadGroup> {
         val key = "series:${showName.trim().lowercase()}"
         groups.getOrPut(key) { mutableListOf() } += DownloadedItem(download, season, episode)
         names.putIfAbsent(key, showName.trim())
-        if (posters[key] == null) posters[key] = download.seriesPoster ?: download.poster
+        // An episode's own picture is a frame from the video; prefer the show's poster.
+        if (download.seriesPoster != null) posters[key] = download.seriesPoster
+        else if (!posters.containsKey(key)) posters[key] = null
         series += key
     }
 
@@ -54,7 +56,7 @@ fun groupDownloads(downloads: List<LocalDownloadEntity>): List<DownloadGroup> {
         DownloadGroup(
             key = key,
             title = names.getValue(key),
-            poster = posters[key],
+            poster = posters[key] ?: items.firstNotNullOfOrNull { it.download.poster },
             isSeries = key in series,
             items = items.sortedWith(
                 compareBy<DownloadedItem>({ it.season ?: Int.MAX_VALUE }, { it.episode ?: Int.MAX_VALUE }, { it.download.title })

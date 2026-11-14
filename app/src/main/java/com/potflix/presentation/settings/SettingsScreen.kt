@@ -285,35 +285,9 @@ fun SettingsScreen(
                 }
             }
 
-            // ─── COMMUNITY & SUPPORT GROUP ───
+            // ─── ABOUT ───
             item {
-                SettingsCardGroup(title = "Community & Support") {
-                    // Telegram Community Item
-                    ModernSettingsItem(
-                        icon = Icons.AutoMirrored.Filled.Send,
-                        iconTint = SamAccent, // Telegram Blue
-                        title = "Telegram Community",
-                        subtitle = "Requests, feedback & announcements • @PotFlixx",
-                        trailingBadge = "Join ↗",
-                        badgeColor = SamAccent,
-                        onClick = {
-                            uriHandler.openUri("https://t.me/PotFlixx")
-                        },
-                        showDivider = true
-                    )
-
-                    // Developer Info
-                    ModernSettingsItem(
-                        icon = Icons.Default.Code,
-                        iconTint = SamAccent, // Violet
-                        title = "Developer Portfolio",
-                        subtitle = "reduan.vercel.app ↗",
-                        onClick = {
-                            uriHandler.openUri("https://reduan.vercel.app")
-                        },
-                        showDivider = true
-                    )
-
+                SettingsCardGroup(title = "About") {
                     // Version, and a manual update check
                     ModernSettingsItem(
                         icon = Icons.Default.SystemUpdate,

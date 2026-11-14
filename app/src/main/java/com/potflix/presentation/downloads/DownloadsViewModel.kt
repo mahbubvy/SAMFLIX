@@ -22,6 +22,8 @@ import java.io.File
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val localDownloadDao: LocalDownloadDao,
+    private val movieDao: com.potflix.data.local.dao.MovieDao,
+    private val movieRepository: com.potflix.domain.repository.MovieRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -40,6 +42,34 @@ class DownloadsViewModel @Inject constructor(
 
     init {
         moveOldDownloadsToSharedFolder()
+        fillInCovers()
+    }
+
+    /**
+     * Downloads made before covers were saved only have the episode's frame. Look up the
+     * show's or movie's poster in the catalogue and remember it.
+     */
+    private fun fillInCovers() {
+        viewModelScope.launch(Dispatchers.IO) {
+            groupDownloads(localDownloadDao.getAllDownloads().first())
+                .filter { group -> group.items.none { it.download.seriesPoster != null } }
+                .forEach { group ->
+                    val cover = posterFor(group.title) ?: return@forEach
+                    group.items.forEach { item ->
+                        localDownloadDao.update(
+                            item.download.copy(
+                                seriesPoster = cover,
+                                seriesTitle = if (group.isSeries) group.title else item.download.seriesTitle
+                            )
+                        )
+                    }
+                }
+        }
+    }
+
+    private suspend fun posterFor(title: String): String? {
+        val plain = title.replace(Regex("""\s*[\(\[]\d{4}[\)\]].*$"""), "").trim()
+        return listOf(title, plain).distinct().firstNotNullOfOrNull { movieDao.posterForTitle(it) }
     }
 
     /**
@@ -58,11 +88,17 @@ class DownloadsViewModel @Inject constructor(
                     val moved = DownloadFiles.moveToSharedFolder(context, File(path), download.title, download.streamUrl, series)
                         ?: return@forEach
                     localDownloadDao.update(download.copy(localUri = moved.absolutePath, seriesTitle = series))
+                    movieRepository.renameInWatchHistory(path, moved.absolutePath)
                 }
         }
     }
 
     fun deleteDownload(downloadId: Long) {
+        // Played-from-file entries in Continue Watching go with the file.
+        viewModelScope.launch {
+            downloads.value.firstOrNull { it.downloadId == downloadId }?.localUri
+                ?.let { movieRepository.removeFromWatchHistory(it) }
+        }
         val intent = android.content.Intent(context, com.potflix.service.DownloadService::class.java).apply {
             action = com.potflix.service.DownloadService.ACTION_CANCEL
             putExtra(com.potflix.service.DownloadService.EXTRA_ID, downloadId)

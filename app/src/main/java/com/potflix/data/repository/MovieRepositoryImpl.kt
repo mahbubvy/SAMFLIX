@@ -18,6 +18,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.potflix.data.remote.TmdbApi
@@ -534,8 +536,38 @@ class MovieRepositoryImpl @Inject constructor(
         firebaseSyncManager.syncWatchHistory(currentHistory)
     }
 
+    /**
+     * Watch history, minus anything played from a downloaded file that has since been deleted
+     * or moved. If only the resume file is gone, the title stays and plays from the server.
+     */
     override fun getWatchHistoryFlow(): Flow<List<Movie>> {
         return _watchHistory.asStateFlow()
+            .map { history ->
+                history.mapNotNull { movie ->
+                    when {
+                        isMissingFile(movie.url) -> null
+                        isMissingFile(movie.lastPlayedStreamUrl) -> movie.copy(lastPlayedStreamUrl = null)
+                        else -> movie
+                    }
+                }
+            }
+            .flowOn(kotlinx.coroutines.Dispatchers.IO)
+    }
+
+    private fun isMissingFile(path: String?): Boolean =
+        path != null && path.startsWith("/") && !java.io.File(path).exists()
+
+    override suspend fun renameInWatchHistory(oldUrl: String, newUrl: String) {
+        val updated = _watchHistory.value.map { movie ->
+            movie.copy(
+                url = if (movie.url == oldUrl) newUrl else movie.url,
+                lastPlayedStreamUrl = if (movie.lastPlayedStreamUrl == oldUrl) newUrl else movie.lastPlayedStreamUrl
+            )
+        }
+        if (updated != _watchHistory.value) {
+            _watchHistory.value = updated
+            prefs.edit().putString("history", gson.toJson(updated)).apply()
+        }
     }
 
     override suspend fun replaceWatchHistory(history: List<Movie>) {

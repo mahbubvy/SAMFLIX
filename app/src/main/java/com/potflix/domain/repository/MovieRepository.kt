@@ -23,6 +23,8 @@ interface MovieRepository {
     suspend fun updateWatchProgress(movieUrl: String, streamUrl: String, position: Long, duration: Long)
     suspend fun removeFromWatchHistory(movieUrl: String)
     fun getWatchHistoryFlow(): Flow<List<Movie>>
+    /** Points history entries at a file's new location after it moved. */
+    suspend fun renameInWatchHistory(oldUrl: String, newUrl: String)
     /** Replaces the whole watch history, newest first. Used by library sync. */
     suspend fun replaceWatchHistory(history: List<Movie>)
 

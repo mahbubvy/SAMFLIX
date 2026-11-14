@@ -95,6 +95,9 @@ interface MovieDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertVideo(video: com.potflix.data.local.entity.VideoEntity)
 
+    @Query("SELECT poster_url FROM movies WHERE title = :title COLLATE NOCASE AND poster_url IS NOT NULL AND poster_url != '' LIMIT 1")
+    suspend fun posterForTitle(title: String): String?
+
     @Query("SELECT id FROM movies WHERE title = :title AND year = :year LIMIT 1")
     suspend fun getMovieIdByTitleAndYear(title: String, year: String?): Long?
 
