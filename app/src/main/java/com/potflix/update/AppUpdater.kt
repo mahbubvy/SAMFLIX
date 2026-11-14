@@ -7,7 +7,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
-import com.google.gson.JsonParser
 import com.potflix.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +50,11 @@ class AppUpdater @Inject constructor(
     private val mutex = Mutex()
     private val prefs by lazy { context.getSharedPreferences("app_updater", Context.MODE_PRIVATE) }
     private val updatesDir by lazy { File(context.cacheDir, "updates").apply { mkdirs() } }
+    // Doesn't follow redirects, so the "latest release" redirect can be read.
+    private val probeClient by lazy {
+        OkHttpClient.Builder().followRedirects(false).connectTimeout(15, TimeUnit.SECONDS).build()
+    }
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -104,31 +108,30 @@ class AppUpdater @Inject constructor(
 
     enum class InstallStep { Started, NeedsPermission }
 
+    /**
+     * Finds the newest release from github.com's "latest release" redirect rather than the GitHub
+     * API. The API allows only 60 anonymous requests an hour per internet address, and an ISP
+     * that puts many customers behind one address uses that up, so checks failed with 403.
+     */
     private fun fetchLatestRelease(): ReleaseInfo? {
         val request = Request.Builder()
-            .url("https://api.github.com/repos/$RELEASES_REPO/releases/latest")
-            .header("Accept", "application/vnd.github+json")
+            .url("https://github.com/$RELEASES_REPO/releases/latest")
+            .head()
             .header("User-Agent", "SAMFLIX-Android")
             .build()
-        client.newCall(request).execute().use { response ->
-            if (response.code == 404) return null // no releases yet
-            check(response.isSuccessful) { "GitHub answered ${response.code}" }
-            val json = JsonParser.parseString(response.body?.string().orEmpty()).asJsonObject
-            val tag = json.get("tag_name")?.asString.orEmpty()
-            val versionCode = versionCodeFromTag(tag) ?: return null
-            val assets = json.getAsJsonArray("assets")?.map { it.asJsonObject }.orEmpty()
-            val abi = Build.SUPPORTED_ABIS.firstOrNull { supported ->
-                assets.any { it.get("name").asString.contains(supported) }
-            } ?: return null
-            val asset = assets.first { it.get("name").asString.contains(abi) && it.get("name").asString.endsWith(".apk") }
-            return ReleaseInfo(
-                versionCode = versionCode,
-                versionName = tag.removePrefix("v"),
-                notes = json.get("body")?.takeIf { !it.isJsonNull }?.asString.orEmpty().trim(),
-                apkUrl = asset.get("browser_download_url").asString,
-                apkSize = asset.get("size")?.asLong ?: -1L
-            )
-        }
+        val tag = probeClient.newCall(request).execute().use { response ->
+            check(response.isRedirect) { "GitHub answered ${response.code}" }
+            tagFromLatestRedirect(response.header("Location").orEmpty())
+        } ?: return null // no releases yet
+        val versionCode = versionCodeFromTag(tag) ?: return null
+        val abi = Build.SUPPORTED_ABIS.firstOrNull { it in RELEASE_ABIS } ?: return null
+        return ReleaseInfo(
+            versionCode = versionCode,
+            versionName = tag.removePrefix("v"),
+            notes = "",
+            apkUrl = apkUrlFor(tag, abi),
+            apkSize = -1L
+        )
     }
 
     private fun download(release: ReleaseInfo): UpdateState {
@@ -184,6 +187,15 @@ class AppUpdater @Inject constructor(
 
     companion object {
         const val RELEASES_REPO = "mahbubvy/SAMFLIX"
+        private val RELEASE_ABIS = setOf("arm64-v8a", "armeabi-v7a")
+
+        /** ".../releases/tag/v3.1.26" → "v3.1.26"; null when there's no release yet. */
+        fun tagFromLatestRedirect(location: String): String? =
+            location.substringAfter("/releases/tag/", "").substringBefore('?').takeIf { it.isNotBlank() }
+
+        /** The APK the release workflow publishes for [abi], e.g. SAMFLIX-3.1.26-arm64-v8a.apk. */
+        fun apkUrlFor(tag: String, abi: String): String =
+            "https://github.com/$RELEASES_REPO/releases/download/$tag/SAMFLIX-${tag.removePrefix("v")}-$abi.apk"
         private const val KEY_LAST_CHECK = "last_check"
         private const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
         private const val VERSION_CODE_BASE = 400

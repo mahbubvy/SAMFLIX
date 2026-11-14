@@ -288,6 +288,17 @@ fun SettingsScreen(
             // ─── ABOUT ───
             item {
                 SettingsCardGroup(title = "About") {
+                    ModernSettingsItem(
+                        icon = Icons.Default.Download,
+                        iconTint = SamAccent,
+                        title = "Releases page",
+                        subtitle = "Download SAMFLIX for another device, or install an update by hand",
+                        trailingBadge = "Open ↗",
+                        badgeColor = SamAccent,
+                        onClick = { uriHandler.openUri("https://github.com/${com.potflix.update.AppUpdater.RELEASES_REPO}/releases/latest") },
+                        showDivider = true
+                    )
+
                     // Version, and a manual update check
                     ModernSettingsItem(
                         icon = Icons.Default.SystemUpdate,

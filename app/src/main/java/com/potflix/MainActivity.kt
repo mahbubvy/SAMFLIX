@@ -9,9 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.foundation.background
 import com.potflix.presentation.navigation.AppBottomBar
-import com.potflix.presentation.navigation.AppNavRail
 import com.potflix.presentation.navigation.Screen
-import com.potflix.presentation.theme.isWideWindow
 import com.potflix.presentation.navigation.PotFlixNavGraph
 import com.potflix.presentation.theme.PotFlixTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -78,32 +76,19 @@ class MainActivity : ComponentActivity() {
                 val startDest = if (serverPreferences.isOnboardingCompleted()) Screen.Home.route else Screen.Onboarding.route
                 com.potflix.update.UpdatePrompt(updater = appUpdater)
 
-                if (isWideWindow()) {
-                    // Tablets and wide windows: tabs in a rail on the left.
-                    Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                        AppNavRail(navController = navController)
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-                            PotFlixNavGraph(navController = navController, startDestination = startDest)
-                        }
-                    }
-                } else {
-                    // Phones: tabs in a bar along the bottom.
-                    Scaffold(
-                        bottomBar = { AppBottomBar(navController = navController) },
-                        containerColor = MaterialTheme.colorScheme.background,
-                        contentWindowInsets = WindowInsets(0)
-                    ) { innerPadding ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(bottom = innerPadding.calculateBottomPadding()),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-                            PotFlixNavGraph(navController = navController, startDestination = startDest)
-                        }
+                // Tabs in a bar along the bottom, on phones and tablets alike.
+                Scaffold(
+                    bottomBar = { AppBottomBar(navController = navController) },
+                    containerColor = MaterialTheme.colorScheme.background,
+                    contentWindowInsets = WindowInsets(0)
+                ) { innerPadding ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = innerPadding.calculateBottomPadding()),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        PotFlixNavGraph(navController = navController, startDestination = startDest)
                     }
                 }
             }

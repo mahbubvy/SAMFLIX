@@ -18,4 +18,14 @@ class AppUpdaterTest {
         assertNull(AppUpdater.versionCodeFromTag("v3.0.0-samonline"))
         assertNull(AppUpdater.versionCodeFromTag("v4.0.1"))
     }
+
+    @Test
+    fun latestReleaseIsReadFromTheRedirect() {
+        assertEquals("v3.1.26", AppUpdater.tagFromLatestRedirect("https://github.com/mahbubvy/SAMFLIX/releases/tag/v3.1.26"))
+        assertEquals(null, AppUpdater.tagFromLatestRedirect("https://github.com/mahbubvy/SAMFLIX/releases"))
+        assertEquals(
+            "https://github.com/mahbubvy/SAMFLIX/releases/download/v3.1.26/SAMFLIX-3.1.26-arm64-v8a.apk",
+            AppUpdater.apkUrlFor("v3.1.26", "arm64-v8a")
+        )
+    }
 }

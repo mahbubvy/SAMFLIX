@@ -108,38 +108,3 @@ fun AppBottomBar(navController: NavController) {
         }
     }
 }
-
-/** Side rail for tablets and other wide windows. */
-@Composable
-fun AppNavRail(navController: NavController, modifier: Modifier = Modifier) {
-    if (!showsAppNavigation(navController)) return
-    val route = currentRoute(navController)
-    NavigationRail(
-        modifier = modifier,
-        containerColor = SamSurface,
-        contentColor = SamText,
-        windowInsets = WindowInsets.systemBars
-    ) {
-        Spacer(Modifier.height(Space.l))
-        Column {
-            AppTab.entries.forEach { tab ->
-                val selected = tab.owns(route)
-                NavigationRailItem(
-                    selected = selected,
-                    onClick = { if (!selected || route != tab.route) navController.openTab(tab) },
-                    icon = { Icon(if (selected) tab.selectedIcon else tab.icon, contentDescription = null) },
-                    label = { Text(tab.label, style = MaterialTheme.typography.labelMedium) },
-                    alwaysShowLabel = true,
-                    colors = NavigationRailItemDefaults.colors(
-                        selectedIconColor = SamAccent,
-                        selectedTextColor = SamAccent,
-                        indicatorColor = SamSurfaceRaised,
-                        unselectedIconColor = SamTextMuted,
-                        unselectedTextColor = SamTextMuted
-                    )
-                )
-                Spacer(Modifier.height(Space.s))
-            }
-        }
-    }
-}
