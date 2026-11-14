@@ -1,77 +1,78 @@
 <div align="center">
 
-<img src="docs/logo.svg" width="96" height="96" alt="PotFlix Logo" />
+# SAMFLIX
 
-# 🍿 PotFlix for Android
+**Stream movies and series from the SamOnline / DhakaFlix servers on Android phones and tablets.**
 
-### Stream Movies & TV Shows. Any BDIX Network, Anytime.
-**Blazing-fast streaming, seamless server switching, and built-in offline downloads on Android — for BDIX connected networks only.**
-
-[![Latest Version](https://img.shields.io/badge/Version-v3.0.0-E50914?style=for-the-badge)](https://github.com/ReduanNurLabid/PotFlix/releases/latest)
-[![Android](https://img.shields.io/badge/Platform-Android%207.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ReduanNurLabid/PotFlix/releases/latest)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
-
-<br/>
-
-### ⚡ 1-Click Direct Download (No GitHub Navigation Required)
-
-Click any button below to download the APK directly to your phone, tablet, or TV:
-
-<br/>
-
-<a href="https://github.com/ReduanNurLabid/PotFlix/releases/latest/download/potflix-arm64-v8a-release.apk">
-  <img src="https://img.shields.io/badge/📥_Download_for_Phones_&_Tablets_(ARM64)-~54_MB-E50914?style=for-the-badge&logo=android&logoColor=white" height="42"/>
-</a>
-<br/>
-<sub>*(Recommended for 95% of users: Samsung, Xiaomi, Pixel, OnePlus, modern TVs)*</sub>
-
-<br/><br/>
-
-<a href="https://github.com/ReduanNurLabid/PotFlix/releases/latest/download/potflix-armeabi-v7a-release.apk">
-  <img src="https://img.shields.io/badge/📺_Download_for_TV_Boxes_&_Firesticks_(ARMv7)-~50_MB-221F1F?style=for-the-badge&logo=android&logoColor=white" height="38"/>
-</a>
-<br/>
-<sub>*(For Amazon Fire TV Stick, Mi Box, smart TVs & older 32-bit devices)*</sub>
-
-<br/><br/>
-
-<a href="https://github.com/ReduanNurLabid/PotFlix/releases/latest/download/potflix-x86_64-release.apk">
-  <img src="https://img.shields.io/badge/🌐_Download_Universal_&_PC_Emulators-~61_MB-333333?style=for-the-badge&logo=android&logoColor=white" height="34"/>
-</a>
-<br/>
-<sub>*(Works on PC emulators & x86_64 architecture devices)*</sub>
+[![Latest release](https://img.shields.io/github/v/release/mahbubvy/SAMFLIX?style=for-the-badge&color=2F8CFF)](https://github.com/mahbubvy/SAMFLIX/releases/latest)
+[![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/mahbubvy/SAMFLIX/releases/latest)
 
 </div>
 
----
-
-> [!WARNING]
-> **Important for Dhakaflix Users:**  
-> PotFlix features the high-speed **Nagordola CDN** and split architecture builds. If your Wi-Fi relies on **Dhakaflix**, please continue using [**PotFlix v2.1.1**](https://github.com/ReduanNurLabid/PotFlix/releases/download/Android.v2.0.0/potflix.v2.1.1.apk) for the best experience.
-
-## 📱 Which APK should you choose?
-
-| File | Size | Best For | Typical Devices |
-| :--- | :--- | :--- | :--- |
-| **`potflix-arm64-v8a-release.apk`** | **~54 MB** | **Modern Android Phones & Tablets** | Samsung, Xiaomi, Pixel, Realme, Vivo, Oppo (2017+) |
-| **`potflix-armeabi-v7a-release.apk`** | **~50 MB** | **Smart TVs, Firestick & TV Boxes** | Fire TV Stick, Mi Box / TV Stick, budget Android TVs |
-| **`potflix-x86_64-release.apk`** | **~61 MB** | **PC Emulators & x86_64 Devices** | BlueStacks, LDPlayer, Android Studio Emulator, Chromebooks |
+> [!NOTE]
+> **SAMFLIX is a fork of [PotFlix](https://github.com/ReduanNurLabid/PotFlix) by [Reduan Nur Labid](https://github.com/ReduanNurLabid).**
+> The catalogue, TMDB metadata, download manager and much of the app come from PotFlix. Thank you, Reduan.
+> SAMFLIX is a modified version made for personal use: it adapts PotFlix to the SamOnline / DhakaFlix servers and redesigns it. It isn't affiliated with or supported by the PotFlix project.
 
 ---
 
-## ✨ Features
+## Download
 
-- 🎬 **Extensive Catalog**: Hollywood, Bollywood, South Indian, Animation, and TV Series.
-- ⚡ **Multi-Server Streaming**: Seamlessly switch between local FTP and CDN servers.
-- 🎛️ **Modern Player**: Gesture brightness & volume controls, double-tap seek, and episode selection.
-- 📥 **Background Downloads**: Built-in download manager with real-time progress indicators.
-- 🔄 **In-App Updates**: Automatically notifies and downloads newer versions from within the app.
+Get the latest APK from the **[Releases page](https://github.com/mahbubvy/SAMFLIX/releases/latest)**:
+
+| File | For |
+| :--- | :--- |
+| `SAMFLIX-<version>-arm64-v8a.apk` | Almost every phone and tablet from the last several years |
+| `SAMFLIX-<version>-armeabi-v7a.apk` | Older or budget 32-bit devices |
+
+After the first install, the app updates itself: **Settings → Check for updates** downloads the newest release and installs it with one tap.
 
 ---
 
-## 🛠️ Installation Instructions
+## What's new in SAMFLIX
 
-1. Download the APK file on your Android device using the direct download buttons above.
-2. Tap the downloaded file from your browser or file manager.
-3. If prompted, enable **"Allow from this source"** in your device settings.
-4. Tap **Install** and enjoy!
+### Built for SamOnline / DhakaFlix
+- **Browse tab** that opens the server folders directly, for anything outside the catalogue.
+- **Episode numbers read from file names** (`S01E05`, `Season 1 Episode 5`, `Ep 5`, `Show - 05`, …), so series list in the right order.
+
+### Redesigned
+- New look: dark theme with a blue accent, consistent type, spacing and colours throughout.
+- Four tabs: **Home, Browse, Search, Library**. Bottom bar on phones, side rail on tablets.
+- Home filters by **All / Movies / Series**.
+- **Library** brings together history, watchlist and downloads.
+- No account or sign-in. Everything stays on your device.
+
+### Player
+- New player based on **mpv**: plays almost any file and codec.
+- Audio and subtitle track picker, double-tap to skip 3 seconds, a thicker seekbar.
+- Picture-in-picture, a countdown to the next episode, and a portrait/landscape switch.
+- A clear error screen with retry when a file won't load.
+
+### Downloads
+- Saved to your phone's **Movies/SAMFLIX** folder, one folder per series, so file managers and other players can open them.
+- Downloads show as covers: a series opens to its episodes in order, episode 1 first.
+- Downloads keep their original file type (`.mkv`, `.mp4`, …), and pause and resume.
+
+### Sync between your devices, without the cloud
+- Your watchlist and history sync between phones and tablets on the **same Wi-Fi**.
+- Link devices once with a 10-character code. Everything is encrypted with that code and nothing leaves your network.
+
+### Updates from GitHub
+- Every change is built and published here as a release automatically.
+- Check and install from **Settings → Check for updates**.
+
+---
+
+## Install
+
+1. Download the APK from the [Releases page](https://github.com/mahbubvy/SAMFLIX/releases/latest) on your phone or tablet.
+2. Open the downloaded file.
+3. If Android asks, allow installing from this source.
+4. Tap **Install**.
+
+---
+
+## Credits
+
+- **[PotFlix](https://github.com/ReduanNurLabid/PotFlix)** by Reduan Nur Labid, the app SAMFLIX is built on.
+- [mpv](https://mpv.io/) for playback, and [TMDB](https://www.themoviedb.org/) for posters and details. This product uses the TMDB API but is not endorsed or certified by TMDB.
