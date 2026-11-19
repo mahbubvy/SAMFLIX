@@ -70,7 +70,10 @@ class MoviesViewModel @Inject constructor(
             try {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     val trendingRes = repository.getTrendingSuggestions("movie")
-                    val top10 = trendingRes.getOrDefault(emptyList()).take(10)
+                    // A different title leads the hero each visit; the rest keep their ranking.
+                    val ranked = trendingRes.getOrDefault(emptyList()).take(10)
+                    val heroPick = ranked.randomOrNull()
+                    val top10 = if (heroPick == null) ranked else listOf(heroPick) + (ranked - heroPick)
                     _trendingMovies.value = top10
 
                     val hero = top10.firstOrNull()
@@ -102,10 +105,11 @@ class MoviesViewModel @Inject constructor(
                         val selectedCategories = movieCategories.sortedBy { it.name }
                         
                         selectedCategories.forEach { category ->
-                            repository.getLatestMovies(category.id).onSuccess { moviesInCat ->
+                            // 15 picked at random from the newest 60, so rows change between visits.
+                            repository.getLatestMovies(category.id, 60).onSuccess { moviesInCat ->
                                 if (moviesInCat.isNotEmpty()) {
                                     dynamicCategories.add(category)
-                                    dynamicCategoryMovies[category.id] = moviesInCat.take(15)
+                                    dynamicCategoryMovies[category.id] = moviesInCat.shuffled().take(15)
                                 }
                             }
                         }

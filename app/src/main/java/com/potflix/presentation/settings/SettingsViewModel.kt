@@ -34,6 +34,8 @@ class SettingsViewModel @Inject constructor(
 
     val isSyncing = MutableStateFlow(false)
     val syncProgress = MutableStateFlow("Starting sync...")
+    /** 0..1 while a sync is running, null when the worker hasn't reported a percentage yet. */
+    val syncFraction = MutableStateFlow<Float?>(null)
     
     private val _lastSyncTime = MutableStateFlow("Never")
     val lastSyncTime: StateFlow<String> = _lastSyncTime.asStateFlow()
@@ -98,14 +100,35 @@ class SettingsViewModel @Inject constructor(
                 isSyncing.value = workInfo.state == androidx.work.WorkInfo.State.RUNNING || 
                                   workInfo.state == androidx.work.WorkInfo.State.ENQUEUED
                                   
-                if (workInfo.state == androidx.work.WorkInfo.State.RUNNING) {
-                    syncProgress.value = "Scanning servers for new content..."
+                when (workInfo.state) {
+                    androidx.work.WorkInfo.State.ENQUEUED -> {
+                        syncProgress.value = "Waiting to start…"
+                        syncFraction.value = null
+                    }
+                    androidx.work.WorkInfo.State.RUNNING -> {
+                        val message = workInfo.progress.getString("progress_msg")
+                        val pct = workInfo.progress.getFloat("progress_pct", -1f)
+                        val found = workInfo.progress.getInt("progress_new", 0)
+                        if (pct >= 0f) syncFraction.value = pct / 100f
+                        val parts = listOfNotNull(
+                            if (pct >= 0f) "${pct.toInt()}%" else null,
+                            message ?: "Connecting to the server…",
+                            if (found > 0) "$found new" else null
+                        )
+                        syncProgress.value = parts.joinToString(" · ")
+                    }
+                    androidx.work.WorkInfo.State.FAILED -> {
+                        syncFraction.value = null
+                        if (wasSyncing) _toastMessage.value = "Sync failed. Check that you're connected to SamOnline and try again."
+                    }
+                    else -> syncFraction.value = null
                 }
-                
+
                 if (workInfo.state == androidx.work.WorkInfo.State.SUCCEEDED) {
                     syncProgress.value = "Sync complete"
                     if (wasSyncing) {
-                        _toastMessage.value = "Database Sync Complete!"
+                        val found = workInfo.outputData.getInt("progress_new", 0)
+                        _toastMessage.value = if (found > 0) "Sync complete: $found new titles" else "Sync complete: nothing new on the server"
                         // Update last sync time
                         val prefs = application.getSharedPreferences("potflix_prefs", Context.MODE_PRIVATE)
                         prefs.edit().putLong("last_sync_time", System.currentTimeMillis()).apply()

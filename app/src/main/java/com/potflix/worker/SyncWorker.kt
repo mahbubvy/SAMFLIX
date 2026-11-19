@@ -30,6 +30,23 @@ class SyncWorker @AssistedInject constructor(
     private val aListScraper: com.potflix.data.remote.AListScraper
 ) : CoroutineWorker(context, workerParams) {
 
+    private var lastProgressAt = 0L
+    private var newItems = 0
+
+    /** Publishes progress for Settings and Home; frequent calls are throttled unless [force] is set. */
+    private suspend fun report(message: String, pct: Float, force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - lastProgressAt < 400) return
+        lastProgressAt = now
+        setProgress(
+            workDataOf(
+                "progress_msg" to message,
+                "progress_pct" to pct.coerceIn(0f, 100f),
+                "progress_new" to newItems
+            )
+        )
+    }
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             val folderUrl = inputData.getString("folderUrl")
@@ -39,7 +56,7 @@ class SyncWorker @AssistedInject constructor(
             val isInitialLoad = inputData.getBoolean("isInitialLoad", true)
 
             if (folderUrl != null && categoryName != null) {
-                setProgress(workDataOf("progress_msg" to "Starting sync for $categoryName...", "progress_pct" to 0f))
+                report("Starting sync for $categoryName...", 0f, force = true)
                 Log.d("SyncWorker", "Starting sync for $categoryName at $folderUrl")
 
                 if (isTvSeries) {
@@ -50,7 +67,7 @@ class SyncWorker @AssistedInject constructor(
                 }
             } else {
                 // AUTOMATIC FETCHING
-                setProgress(workDataOf("progress_msg" to "Discovering server content...", "progress_pct" to 0f))
+                report("Discovering server content...", 0f, force = true)
                 
                 // 1. If Initial Load, Try to load all JSON files from assets/database/{serverFolder}
                 if (isInitialLoad) {
@@ -70,12 +87,12 @@ class SyncWorker @AssistedInject constructor(
                                 val endPct = (i + 1) * pctPerFile
                                 
                                 if (isTv) {
-                                    syncTvSeries(categoryName, "")
+                                    syncTvSeries(categoryName, "", startPct, endPct)
                                 } else {
                                     syncMovies(categoryName, "", emptyList(), startPct, endPct, isFullSync = true)
                                 }
                             }
-                            setProgress(workDataOf("progress_msg" to "Sync completed successfully!", "progress_pct" to 100f))
+                            report("Sync completed successfully!", 100f, force = true)
                             return@withContext Result.success()
                         }
                     } catch (e: Exception) {
@@ -95,18 +112,18 @@ class SyncWorker @AssistedInject constructor(
                     val pctPerBase = 90f / bases.size
                     for ((parentType, baseUrl) in bases) {
                         try {
-                            setProgress(workDataOf("progress_msg" to "Scanning $parentType...", "progress_pct" to currentPct))
+                            report("Scanning $parentType...", currentPct, force = true)
                             val entries = aListScraper.scrapeDirectory(baseUrl)
                             val folders = entries.filter { it.isDirectory }
                             
                             val pctPerFolder = pctPerBase / Math.max(1, folders.size)
                             for ((i, f) in folders.withIndex()) {
                                 val folderPct = currentPct + (i * pctPerFolder)
-                                setProgress(workDataOf("progress_msg" to "Fetching ${f.name}...", "progress_pct" to folderPct))
+                                report("Fetching ${f.name}...", folderPct, force = true)
                                 
                                 val isTv = parentType == "TV Series" || f.name.contains("tvshows", ignoreCase = true)
                                 if (isTv) {
-                                    syncTvSeries(f.name, f.url)
+                                    syncTvSeries(f.name, f.url, folderPct, folderPct + pctPerFolder)
                                 } else {
                                     syncMovies(f.name, f.url, listOf("2026", "2025", "2024", "2023"), folderPct, folderPct + pctPerFolder, isFullSync)
                                 }
@@ -121,15 +138,17 @@ class SyncWorker @AssistedInject constructor(
                         val startPct = index * pctPerBase
                         syncMovies(section.first, section.second, recentYears, startPct, startPct + pctPerBase, isFullSync)
                     }
-                    for (section in LIVE_SERIES_SECTIONS) {
-                        syncTvSeries(section.first, section.second)
+                    val pctPerSeries = 30f / LIVE_SERIES_SECTIONS.size
+                    for ((index, section) in LIVE_SERIES_SECTIONS.withIndex()) {
+                        val startPct = 70f + index * pctPerSeries
+                        syncTvSeries(section.first, section.second, startPct, startPct + pctPerSeries)
                     }
                 }
             }
 
-            setProgress(workDataOf("progress_msg" to "Sync completed successfully!", "progress_pct" to 100f))
+            report("Sync completed successfully!", 100f, force = true)
             Log.d("SyncWorker", "Background sync completed successfully")
-            Result.success()
+            Result.success(workDataOf("progress_new" to newItems))
         } catch (e: Exception) {
             Log.e("SyncWorker", "Sync failed", e)
             Result.failure()
@@ -188,7 +207,7 @@ class SyncWorker @AssistedInject constructor(
         val preCrawled = getPreCrawledData(categoryName)
         if (preCrawled != null && preCrawled.isNotEmpty()) {
             Log.d("SyncWorker", "Using pre-crawled database for $categoryName")
-            setProgress(workDataOf("progress_msg" to "Importing $categoryName...", "progress_pct" to basePct))
+            report("Importing $categoryName...", basePct, force = true)
             
             val toProcess = if (isFullSync) preCrawled else preCrawled.take(30)
             val batches = toProcess.chunked(IMPORT_BATCH_SIZE)
@@ -201,14 +220,14 @@ class SyncWorker @AssistedInject constructor(
                         importCatalogueRow(item)
                     }
                 }
-                setProgress(workDataOf("progress_msg" to "Importing $categoryName...", "progress_pct" to (basePct + ((index + 1) * pctPerBatch))))
+                report("Importing $categoryName...", (basePct + ((index + 1) * pctPerBatch)), force = true)
             }
             return
         }
 
         val scraper = if (serverPreferences.activeServer.value.type == com.potflix.data.local.preferences.ServerType.ALIST) aListScraper else PotFlixScraper
         
-        setProgress(workDataOf("progress_msg" to "Fetching $categoryName directory...", "progress_pct" to basePct))
+        report("Fetching $categoryName directory...", basePct, force = true)
         val rootEntries = scraper.scrapeDirectory(baseUrl)
         
         val pctPerYear = (maxPct - basePct) / Math.max(1, yearsToSync.size)
@@ -219,19 +238,19 @@ class SyncWorker @AssistedInject constructor(
         if (yearFoldersFound.isNotEmpty()) {
             for ((index, year) in yearsToSync.withIndex()) {
                 val currentBasePct = basePct + (index * pctPerYear)
-                setProgress(workDataOf("progress_msg" to "Syncing $categoryName ($year)...", "progress_pct" to currentBasePct))
+                report("Syncing $categoryName ($year)...", currentBasePct, force = true)
                 
                 val yearFolder = rootEntries.find { it.isDirectory && it.name.contains("($year)") }
                 if (yearFolder != null) {
                     val movieFolders = scraper.scrapeDirectory(yearFolder.url)
                     Log.d("SyncWorker", "Syncing $categoryName for year $year")
-                    processMovieFolders(if (isFullSync) movieFolders else movieFolders.take(30), categoryName, year, scraper)
+                    processMovieFolders(if (isFullSync) movieFolders else movieFolders.take(30), categoryName, year, scraper, currentBasePct, currentBasePct + pctPerYear, "$categoryName ($year)")
                 }
             }
         } else {
             // No year folders found, assume movies are directly in the root directory (CDN Structure)
             Log.d("SyncWorker", "No year folders found, syncing $categoryName directly...")
-            setProgress(workDataOf("progress_msg" to "Syncing $categoryName...", "progress_pct" to basePct))
+            report("Syncing $categoryName...", basePct, force = true)
             
             // Critical Fix: Filter movies by year to avoid infinite sync times!
             val recentMovies = rootEntries.filter { it.year?.toString() in yearsToSync }
@@ -242,14 +261,24 @@ class SyncWorker @AssistedInject constructor(
             }
             
             Log.d("SyncWorker", "Found ${moviesToSync.size} movies for $categoryName")
-            processMovieFolders(moviesToSync, categoryName, "", scraper)
+            processMovieFolders(moviesToSync, categoryName, "", scraper, basePct, maxPct)
         }
     }
 
-    private suspend fun processMovieFolders(folders: List<com.potflix.data.remote.ScrapedEntry>, categoryName: String, defaultYear: String, scraper: com.potflix.data.remote.DirectoryScraper) {
+    private suspend fun processMovieFolders(
+        folders: List<com.potflix.data.remote.ScrapedEntry>,
+        categoryName: String,
+        defaultYear: String,
+        scraper: com.potflix.data.remote.DirectoryScraper,
+        startPct: Float = 0f,
+        endPct: Float = startPct,
+        label: String = categoryName
+    ) {
         // Movies might be folders (FTP / some CDNs) or directly video files (sometimes)
         // Here we primarily look for folders that contain the movie, or fallback
-        for (mf in folders.filter { it.isDirectory }) {
+        val movieDirs = folders.filter { it.isDirectory }
+        for ((i, mf) in movieDirs.withIndex()) {
+            report("$label · ${i + 1} of ${movieDirs.size}", startPct + (endPct - startPct) * i / movieDirs.size.coerceAtLeast(1))
             val parsedTitle = mf.title ?: mf.name
             val parsedYear = mf.year?.toString() ?: defaultYear
             
@@ -258,6 +287,7 @@ class SyncWorker @AssistedInject constructor(
             if (existing == null) {
                 try {
                     Log.d("SyncWorker", "New movie discovered: $parsedTitle ($parsedYear)")
+                    newItems++
                     
                     // Scrape video files
                     val contents = scraper.scrapeDirectory(mf.url)
@@ -327,11 +357,11 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun syncTvSeries(categoryName: String, baseUrl: String) {
+    private suspend fun syncTvSeries(categoryName: String, baseUrl: String, basePct: Float = 90f, maxPct: Float = 100f) {
         val preCrawled = getPreCrawledData(categoryName)
         if (preCrawled != null && preCrawled.isNotEmpty()) {
             Log.d("SyncWorker", "Using pre-crawled database for TV Series: $categoryName")
-            setProgress(workDataOf("progress_msg" to "Importing $categoryName...", "progress_pct" to 90f))
+            report("Importing $categoryName...", basePct, force = true)
             
             for (item in preCrawled) {
                 val existingSearch = movieDao.searchMovies(item.title)
@@ -372,10 +402,17 @@ class SyncWorker @AssistedInject constructor(
         // Root level delta check
         val rootEntries = scraper.scrapeDirectory(baseUrl)
         // Recursively find series folders up to depth 2
+        var seriesPct = basePct
         suspend fun crawl(entries: List<com.potflix.data.remote.ScrapedEntry>, depth: Int, parentFolderName: String = "") {
             if (depth > 2) return
-            setProgress(workDataOf("progress_msg" to "Syncing TV Series...", "progress_pct" to 90f))
-            for (folder in entries.filter { it.isDirectory }) {
+            val dirs = entries.filter { it.isDirectory }
+            for ((i, folder) in dirs.withIndex()) {
+                if (depth == 0) {
+                    seriesPct = basePct + (maxPct - basePct) * i / dirs.size.coerceAtLeast(1)
+                    report("$categoryName · ${i + 1} of ${dirs.size}", seriesPct)
+                } else {
+                    report("$categoryName · ${folder.name}", seriesPct)
+                }
                 // If it looks like a series folder (has year or specific name structure)
                 // Or if it's a structural folder like "A-L"
                 val isSeasonFolder = folder.name.contains("Season", ignoreCase = true)
@@ -407,6 +444,7 @@ class SyncWorker @AssistedInject constructor(
         if (!exists) {
             try {
                 Log.d("SyncWorker", "New TV Series discovered: $title")
+                newItems++
                 
                 val tmdbMatch = try {
                     val tmdbSearch = api.searchTv(title, null)

@@ -189,6 +189,7 @@ fun SettingsScreen(
             item {
                 val isSyncing by viewModel.isSyncing.collectAsState()
                 val syncProgress by viewModel.syncProgress.collectAsState()
+                val syncFraction by viewModel.syncFraction.collectAsState()
                 val lastSyncTime by viewModel.lastSyncTime.collectAsState()
 
                 SettingsCardGroup(title = "Storage & Database") {
@@ -209,6 +210,7 @@ fun SettingsScreen(
                         title = if (isSyncing) "Syncing Database..." else "Sync Database",
                         subtitle = if (isSyncing) syncProgress else "Last: $lastSyncTime",
                         isLoading = isSyncing,
+                        progress = if (isSyncing) syncFraction else null,
                         onClick = { if (!isSyncing) viewModel.syncDatabase() },
                         showDivider = false
                     )
@@ -729,6 +731,8 @@ private fun ModernSettingsItem(
     trailingBadge: String? = null,
     badgeColor: Color = SamAccent,
     isLoading: Boolean = false,
+    /** When set, a bar under the row shows how far a long task has got (0..1). */
+    progress: Float? = null,
     showDivider: Boolean = true,
     onClick: () -> Unit
 ) {
@@ -771,7 +775,7 @@ private fun ModernSettingsItem(
                     text = subtitle,
                     fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.5f),
-                    maxLines = 1,
+                    maxLines = if (progress != null) 2 else 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -779,7 +783,14 @@ private fun ModernSettingsItem(
             Spacer(modifier = Modifier.width(8.dp))
 
             // Trailing Accessory
-            if (isLoading) {
+            if (isLoading && progress != null) {
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SamAccent
+                )
+            } else if (isLoading) {
                 CircularProgressIndicator(
                     color = SamAccent,
                     modifier = Modifier.size(20.dp),
@@ -823,6 +834,19 @@ private fun ModernSettingsItem(
                     modifier = Modifier.size(16.dp)
                 )
             }
+        }
+
+        if (progress != null) {
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                color = SamAccent,
+                trackColor = SamSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 68.dp, end = 16.dp, bottom = 12.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+            )
         }
 
         if (showDivider) {

@@ -82,6 +82,11 @@ class HomeViewModel @Inject constructor(
                                        
                 val wasSyncing = isSyncing.value
                 isSyncing.value = currentlySyncing
+                if (workInfo.state == androidx.work.WorkInfo.State.RUNNING) {
+                    val pct = workInfo.progress.getFloat("progress_pct", -1f)
+                    val message = workInfo.progress.getString("progress_msg") ?: "Syncing Database..."
+                    syncProgress.value = if (pct >= 0f) "Syncing ${pct.toInt()}% · $message" else message
+                }
                 
                 if (wasSyncing && !currentlySyncing) {
                     // Sync just finished, reload data
@@ -116,7 +121,10 @@ class HomeViewModel @Inject constructor(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     // 1. Get Trending Banner (Top 10 mixed movies/series)
                     val trendingRes = repository.getTrendingSuggestions("all")
-                    val top10 = trendingRes.getOrDefault(emptyList()).take(10)
+                    // A different title leads the hero each time Home loads; the rest keep their ranking.
+                    val ranked = trendingRes.getOrDefault(emptyList()).take(10)
+                    val heroPick = ranked.randomOrNull()
+                    val top10 = if (heroPick == null) ranked else listOf(heroPick) + (ranked - heroPick)
                     _trendingMovies.value = top10
                     
                     val hero = top10.firstOrNull()
@@ -144,11 +152,17 @@ class HomeViewModel @Inject constructor(
                         val dynamicCategories = mutableListOf<Category>()
                         val dynamicCategoryMovies = mutableMapOf<String, List<Movie>>()
                         
-                        dbCategories.forEach { category ->
-                            repository.getLatestMovies(category.id).onSuccess { moviesInCat ->
+                        val homeCategories = dbCategories
+                            .filterNot { it.id in HOME_HIDDEN_CATEGORIES }
+                            .sortedWith(compareBy<Category> { category ->
+                                HOME_CATEGORY_ORDER.indexOf(category.id).takeIf { it >= 0 } ?: Int.MAX_VALUE
+                            }.thenBy { it.name })
+                        homeCategories.forEach { category ->
+                            // Pick 15 at random from the newest 60 so each visit shows a different mix.
+                            repository.getLatestMovies(category.id, ROW_POOL_SIZE).onSuccess { moviesInCat ->
                                 if (moviesInCat.isNotEmpty()) {
                                     dynamicCategories.add(category)
-                                    dynamicCategoryMovies[category.id] = moviesInCat.take(15)
+                                    dynamicCategoryMovies[category.id] = moviesInCat.shuffled().take(ROW_SIZE)
                                 }
                             }
                         }
@@ -168,3 +182,18 @@ class HomeViewModel @Inject constructor(
         }
     }
 }
+
+private const val ROW_POOL_SIZE = 60
+private const val ROW_SIZE = 15
+
+/** Rows shown first on Home, in this order; any other category follows alphabetically. */
+private val HOME_CATEGORY_ORDER = listOf(
+    "Anime Series",
+    "Hollywood",
+    "TV Series",
+    "Korean TV Series",
+    "Tollywood"
+)
+
+/** Left off Home; still reachable from Browse. */
+private val HOME_HIDDEN_CATEGORIES = setOf("Awards & TV Series", "Wrestling Series")
