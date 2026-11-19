@@ -31,14 +31,14 @@ import com.potflix.presentation.theme.Space
 @Composable
 fun UpdatePrompt(updater: AppUpdater) {
     val state by updater.state.collectAsState()
-    var dismissedVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    val dismissedVersion by updater.dismissedVersion.collectAsState()
     var waitingForPermission by rememberSaveable { mutableStateOf(false) }
 
     val ready = state as? UpdateState.Ready ?: return
     if (ready.version == dismissedVersion) return
 
     AlertDialog(
-        onDismissRequest = { dismissedVersion = ready.version },
+        onDismissRequest = { updater.dismissPrompt(ready.version) },
         containerColor = SamSurfaceRaised,
         title = { Text("Update ready", color = SamText) },
         text = {
@@ -64,7 +64,7 @@ fun UpdatePrompt(updater: AppUpdater) {
             }) { Text("Install") }
         },
         dismissButton = {
-            TextButton(onClick = { dismissedVersion = ready.version }) { Text("Later", color = SamText) }
+            TextButton(onClick = { updater.dismissPrompt(ready.version) }) { Text("Later", color = SamText) }
         }
     )
 }

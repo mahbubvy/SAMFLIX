@@ -47,6 +47,14 @@ class AppUpdater @Inject constructor(
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
+    /** The version whose "Update ready" prompt the user put off with Later; a manual check clears it. */
+    private val _dismissedVersion = MutableStateFlow<String?>(null)
+    val dismissedVersion: StateFlow<String?> = _dismissedVersion.asStateFlow()
+
+    fun dismissPrompt(version: String) {
+        _dismissedVersion.value = version
+    }
+
     private val mutex = Mutex()
     private val prefs by lazy { context.getSharedPreferences("app_updater", Context.MODE_PRIVATE) }
     private val updatesDir by lazy { File(context.cacheDir, "updates").apply { mkdirs() } }
@@ -64,7 +72,12 @@ class AppUpdater @Inject constructor(
      * Looks for a newer release and downloads it. Automatic checks run at most once a day and
      * only download on unmetered networks; a check the user asked for always runs and downloads.
      */
-    suspend fun check(manual: Boolean): UpdateState = mutex.withLock {
+    suspend fun check(manual: Boolean): UpdateState {
+        if (manual) _dismissedVersion.value = null
+        return mutex.withLock { checkLocked(manual) }
+    }
+
+    private suspend fun checkLocked(manual: Boolean): UpdateState =
         withContext(Dispatchers.IO) {
             deleteInstalledUpdates()
             val current = _state.value
@@ -86,7 +99,6 @@ class AppUpdater @Inject constructor(
             _state.value = result
             result
         }
-    }
 
     /** Opens Android's installer for a downloaded update, asking for install permission first if needed. */
     fun install(ready: UpdateState.Ready): InstallStep {

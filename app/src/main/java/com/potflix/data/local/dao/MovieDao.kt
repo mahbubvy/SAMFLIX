@@ -101,6 +101,9 @@ interface MovieDao {
     @Query("SELECT id FROM movies WHERE title = :title AND year = :year LIMIT 1")
     suspend fun getMovieIdByTitleAndYear(title: String, year: String?): Long?
 
+    @Query("SELECT id FROM movies WHERE title = :title AND year = :year AND category = :category LIMIT 1")
+    suspend fun getMovieIdByTitleYearAndCategory(title: String, year: String, category: String?): Long?
+
     @Transaction
     @Query("SELECT * FROM movies WHERE title = :title AND year = :year LIMIT 1")
     suspend fun getMovieWithDetailsByTitleAndYear(title: String, year: String): MovieWithDetails?

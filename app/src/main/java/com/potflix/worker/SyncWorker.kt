@@ -172,16 +172,24 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 
-    /** Adds a title, or attaches a new quality to it when the same title already exists. */
-    private suspend fun importCatalogueRow(item: PreCrawledMovie) {
-        val movieId = movieDao.getMovieIdByTitleAndYear(item.title, item.year ?: "")
+    /**
+     * Adds a title, or attaches a new quality to it when the same title already exists.
+     * Series are matched within their own category, so a show listed under two categories stays in both.
+     */
+    private suspend fun importCatalogueRow(item: PreCrawledMovie, isSeries: Boolean = false) {
+        val existingId = if (isSeries) {
+            movieDao.getMovieIdByTitleYearAndCategory(item.title, item.year ?: "", item.category)
+        } else {
+            movieDao.getMovieIdByTitleAndYear(item.title, item.year ?: "")
+        }
+        val movieId = existingId
             ?: movieDao.insertMovie(
                 com.potflix.data.local.entity.MovieEntity(
                     title = item.title,
                     year = item.year ?: "",
                     posterUrl = item.posterUrl,
                     category = item.category,
-                    region = null,
+                    region = if (isSeries) "English" else null,
                     tmdbId = item.tmdbId,
                     overview = item.overview,
                     rating = item.rating?.takeIf { it > 0.0 },
@@ -362,37 +370,19 @@ class SyncWorker @AssistedInject constructor(
         if (preCrawled != null && preCrawled.isNotEmpty()) {
             Log.d("SyncWorker", "Using pre-crawled database for TV Series: $categoryName")
             report("Importing $categoryName...", basePct, force = true)
-            
-            for (item in preCrawled) {
-                val existingSearch = movieDao.searchMovies(item.title)
-                val exists = existingSearch.any { it.movie.category == categoryName && it.movie.title.equals(item.title, ignoreCase = true) }
-                
-                if (!exists) {
-                    val movieId = movieDao.insertMovie(
-                        com.potflix.data.local.entity.MovieEntity(
-                            title = item.title,
-                            year = item.year ?: "",
-                            posterUrl = item.posterUrl,
-                            category = item.category,
-                            region = "English", // Defaulting to English as fallback
-                            tmdbId = item.tmdbId,
-                            overview = item.overview,
-                            rating = item.rating?.takeIf { it > 0.0 }
-                        )
-                    )
-                    if (movieId > 0) {
-                        for (v in item.resolvedVideos()) {
-                            movieDao.insertVideo(
-                                com.potflix.data.local.entity.VideoEntity(
-                                    movieId = movieId,
-                                    quality = v.quality,
-                                    url = v.url,
-                                    fileName = v.name
-                                )
-                            )
-                        }
+
+            // Same path as movies: an indexed lookup per row and one transaction per batch.
+            // The old loop ran a full-text search of the whole catalogue for every series.
+            val batches = preCrawled.chunked(IMPORT_BATCH_SIZE)
+            val pctPerBatch = (maxPct - basePct) / batches.size.coerceAtLeast(1)
+            for ((index, batch) in batches.withIndex()) {
+                database.withTransaction {
+                    for (item in batch) {
+                        importCatalogueRow(item, isSeries = true)
                     }
                 }
+                val done = minOf((index + 1) * IMPORT_BATCH_SIZE, preCrawled.size)
+                report("Importing $categoryName · $done of ${preCrawled.size}", basePct + (index + 1) * pctPerBatch, force = true)
             }
             return
         }

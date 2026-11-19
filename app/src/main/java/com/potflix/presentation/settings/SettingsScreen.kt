@@ -302,12 +302,28 @@ fun SettingsScreen(
                     )
 
                     // Version, and a manual update check
+                    val updateState by viewModel.updateState.collectAsState()
+                    val updateBusy = updateState is com.potflix.update.UpdateState.Checking ||
+                        updateState is com.potflix.update.UpdateState.Downloading
                     ModernSettingsItem(
                         icon = Icons.Default.SystemUpdate,
                         iconTint = SamAccent,
-                        title = "Check for updates",
-                        subtitle = "Looks for a newer version on GitHub and offers to install it",
+                        title = when (val s = updateState) {
+                            is com.potflix.update.UpdateState.Downloading -> "Downloading ${s.version}…"
+                            is com.potflix.update.UpdateState.Ready -> "Update ${s.version} ready"
+                            else -> "Check for updates"
+                        },
+                        subtitle = when (val s = updateState) {
+                            is com.potflix.update.UpdateState.Checking -> "Asking GitHub for the latest version…"
+                            is com.potflix.update.UpdateState.Downloading -> "${s.percent}% downloaded · you can keep using the app"
+                            is com.potflix.update.UpdateState.Ready -> "Tap to install"
+                            is com.potflix.update.UpdateState.UpToDate -> "You're on the latest version"
+                            is com.potflix.update.UpdateState.Failed -> "Last check failed: ${s.message}"
+                            else -> "Looks for a newer version on GitHub and offers to install it"
+                        },
                         trailingValue = "v${BuildConfig.VERSION_NAME}",
+                        isLoading = updateBusy,
+                        progress = (updateState as? com.potflix.update.UpdateState.Downloading)?.percent?.div(100f),
                         onClick = { viewModel.checkForUpdates() },
                         showDivider = false
                     )

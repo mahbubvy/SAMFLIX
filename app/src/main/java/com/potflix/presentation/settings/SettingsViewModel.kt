@@ -276,6 +276,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Checks GitHub for a newer SAMFLIX. A found update downloads, then the app-wide prompt offers to install it. */
+    val updateState = appUpdater.state
+
     fun checkForUpdates() {
         _toastMessage.value = "Checking for updates…"
         viewModelScope.launch {
